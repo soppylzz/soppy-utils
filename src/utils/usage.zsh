@@ -33,5 +33,5 @@ create_usager() {
   __usage_brief[$name]="$2"
   __usage_detailed[$name]="$3"
 
-  functions[$name]='if [[ "${1:-}" == true ]]; then style_rich "$__usage_detailed[$0]" 1; else style_rich "$__usage_brief[$0]" 1; fi'
+  functions[$name]='if [[ "${1:-}" == true ]]; then style_rich "${__usage_detailed[$0]}" 1; else style_rich "${__usage_brief[$0]}" 1; fi'
 }

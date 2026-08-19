@@ -47,8 +47,13 @@ __bump_version() {
 __commit_bump() {
   local msg="$1"
 
-  # Breaking footer (matches `BREAKING CHANGE:` at any position).
-  [[ "$msg" == *'BREAKING CHANGE:'* ]] && { print -r -- "major"; return 0; }
+  # Breaking footer: a line that *starts* with `BREAKING CHANGE:` or
+  # `BREAKING-CHANGE:` (Conventional Commits spec). Checking each line avoids
+  # flagging body prose that merely mentions the phrase.
+  local line
+  for line in ${(f)msg}; do
+    [[ "$line" =~ '^BREAKING[ -]CHANGE:' ]] && { print -r -- "major"; return 0; }
+  done
 
   local subject="${msg%%$'\n'*}"
 
@@ -88,7 +93,11 @@ __suggest() {
 
   local bump="none"
   local h this
+  # Skip when the rev-list is empty: `"${(@f)$(…)}"` yields a one-element array
+  # containing "" rather than an empty array, so a bare loop would run once with
+  # `h=""` and rely on `git log` failing silently.
   for h in "$hashes[@]"; do
+    [[ -n "$h" ]] || continue
     this="$(__commit_bump "$(git log -1 --format=%B "$h" 2>/dev/null)")"
     case "$this" in
       major) bump="major"; break ;;

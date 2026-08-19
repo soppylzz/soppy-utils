@@ -76,30 +76,29 @@ info() { style info  "$1" 2; }
 # style_rich <text> [fd]
 #
 # Prints <text> with inline `{{token}}…{{/}}` spans styled as `token`. With
-# color disabled the markup is stripped and the text prints plain. Used for
-# multi-part output such as usage lines.
+# color disabled the markup is stripped and the text prints plain. Markers are
+# `{{token}}` (open) and `{{/}}` (close); unmatched markers are dropped so
+# malformed input degrades to readable text. Used for multi-part output such as
+# usage lines.
 style_rich() {
   local text="$1" fd="${2:-2}"
   local enabled=0
   __style_enabled "$fd" && enabled=1
 
-  local out="" rest="$text" tok="" opened=0
-  while [[ "$rest" =~ '\{\{([a-zA-Z0-9_-]+)\}\}' ]]; do
-    tok="${match[1]}"
-    out+="${rest%%\{\{$tok\}\}*}"
-    rest="${rest#*\{\{$tok\}\}}"
-    if (( enabled )); then
-      out+="$(__style_sgr "$tok")"
-      opened=1
-    fi
-    if [[ "$rest" == *'{{/}}'* ]]; then
-      out+="${rest%%\{\{/\}\}*}"
+  local out="" rest="$text" marker="" name="" opened=0
+  while [[ "$rest" =~ '\{\{[a-zA-Z0-9_/-]*\}\}' ]]; do
+    marker="$MATCH"
+    out+="${rest%%"$marker"*}"
+    rest="${rest#*"$marker"}"
+
+    name="${marker#\{\{}"
+    name="${name%\}\}}"
+    if [[ "$name" == "/" ]]; then
       (( enabled )) && out+="${__style_reset}"
-      rest="${rest#*\{\{/\}\}}"
       opened=0
-    else
-      out+="$rest"
-      rest=""
+    elif [[ "$name" != "" ]]; then
+      (( enabled )) && out+="$(__style_sgr "$name")"
+      opened=1
     fi
   done
   out+="$rest"

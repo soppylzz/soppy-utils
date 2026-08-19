@@ -10,6 +10,23 @@ __license_dir="${__license_dir:A:h}"
 source "$__license_dir/utils/template.zsh"
 source "$__license_dir/usage/license.zsh"
 
+# __resolve_author
+#
+# Resolves the author name: prefer `git config user.name`, falling back to
+# `$USER` when git is missing or user.name is unset. Resolved per invocation so
+# a changed git config is honored without re-sourcing.
+__resolve_author() {
+  local a=""
+  if command -v git >/dev/null 2>&1; then
+    a="$(git config user.name 2>/dev/null)"
+  fi
+  if [[ -n "$a" ]]; then
+    print -r -- "$a"
+  else
+    print -r -- "${USER:-}"
+  fi
+}
+
 # license <type>
 #
 # Builds the readonly value map (author + year), reads the template for the
@@ -18,7 +35,7 @@ license() {
   local type="$1"
 
   typeset -rA __license_values=(
-    name "$__license_author"
+    name "$(__resolve_author)"
     year "$(date +%Y)"
   )
 
@@ -49,6 +66,10 @@ license_main() {
         output="$2"
         shift
         ;;
+      --output=*)
+        output="${1#--output=}"
+        [[ -n "$output" ]] || { err "license: --output requires a file"; usage_license true >&2; return 1; }
+        ;;
       --help) usage_license true; return 0 ;;
       -h)     usage_license false; return 0 ;;
       *)
@@ -71,10 +92,3 @@ license_main() {
     license "$type"
   fi
 }
-
-# Resolve the author name once: prefer `git config user.name`, falling back to
-# `$USER` when git is missing or user.name is unset.
-if command -v git >/dev/null 2>&1; then
-  __license_author="$(git config user.name 2>/dev/null)"
-fi
-[[ -n "$__license_author" ]] || __license_author="${USER:-}"

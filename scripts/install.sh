@@ -52,6 +52,8 @@ if [[ $__is_local_clone == true ]]; then
     print -r -- "soppy-utils: copy failed" >&2
     exit 1
   }
+  # The install target is a plain copy, not a checkout; drop the VCS metadata.
+  rm -rf "$__install_target/.git"
 elif command -v git >/dev/null 2>&1; then
   # Mode B — silent clone.
   print -r -- "soppy-utils: cloning $__repo_url"
@@ -75,7 +77,14 @@ else
     rm -rf "$__tmp_dir"
     exit 1
   }
-  mv "$__tmp_dir/soppy-utils-$__repo_branch" "$__install_target"
+  # Create the target's parent (~/.local/share) so the rename has a home; the
+  # target itself must not pre-exist or `mv` would nest the dir inside it.
+  mkdir -p "${__install_target:h}"
+  mv "$__tmp_dir/soppy-utils-$__repo_branch" "$__install_target" || {
+    print -r -- "soppy-utils: failed to move files into place" >&2
+    rm -rf "$__tmp_dir"
+    exit 1
+  }
   rm -rf "$__tmp_dir"
 fi
 
@@ -92,8 +101,13 @@ if [[ ":$PATH:" != *":$__install_bin:"* ]]; then
   print -r -- "  export PATH=\"\$HOME/.local/bin:\$PATH\""
 fi
 
-# Mode A — remove the source clone, unless it is already the install target.
+# Mode A — remove the source clone, unless it is already the install target or
+# it has uncommitted/untracked changes worth preserving.
 if [[ $__is_local_clone == true && "$__clone_root" != "$__install_target" ]]; then
-  print -r -- "soppy-utils: removing source clone $__clone_root"
-  rm -rf "$__clone_root"
+  if [[ -n "$(git -C "$__clone_root" status --porcelain 2>/dev/null)" ]]; then
+    print -r -- "soppy-utils: leaving source clone $__clone_root (has uncommitted changes)" >&2
+  else
+    print -r -- "soppy-utils: removing source clone $__clone_root"
+    rm -rf "$__clone_root"
+  fi
 fi

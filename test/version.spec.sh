@@ -5,7 +5,8 @@
 source "${0:A:h}/general/helpers.zsh"
 
 # Mock git so versioning is deterministic and independent of the real repo.
-__log=()           # lines of `hash|message`
+__log=()           # lines of `hash|message` — commits since the latest tag
+__pre_tag=()       # lines of `hash|message` — commits before the latest tag
 __tags=()          # tags reachable from HEAD, newest first
 git() {
   case "$1" in
@@ -13,15 +14,23 @@ git() {
       (( ${#__tags} )) && print -r -- "${__tags[1]}" || return 1
       ;;
     rev-list)
-      # `git rev-list [tag..]HEAD` — emit the hashes in __log order.
-      for entry in "$__log[@]"; do
-        print -r -- "${entry%%|*}"
-      done
+      # `git rev-list HEAD` (no range) returns full history; `git rev-list
+      # <tag>..HEAD` returns only the commits since <tag>. Respect the range so
+      # a regression in __suggest that walks the wrong refs is caught.
+      if [[ "${2:-}" == *..* ]]; then
+        for entry in "$__log[@]"; do
+          print -r -- "${entry%%|*}"
+        done
+      else
+        for entry in "$__pre_tag[@]" "$__log[@]"; do
+          print -r -- "${entry%%|*}"
+        done
+      fi
       ;;
     log)
       # `git log -1 --format=%B <hash>` — emit the message for that hash.
       local h="${@[-1]}"
-      for entry in "$__log[@]"; do
+      for entry in "$__pre_tag[@]" "$__log[@]"; do
         [[ "${entry%%|*}" == "$h" ]] && print -r -- "${entry#*|}"
       done
       ;;
@@ -41,6 +50,8 @@ describe "version: __bump_version"
 describe "version: __commit_bump"
 
   toBe "breaking footer is major" "$(__commit_bump $'fix: x\n\nBREAKING CHANGE: y')" "major"
+  toBe "hyphen footer is major" "$(__commit_bump $'fix: x\n\nBREAKING-CHANGE: y')" "major"
+  toBe "body prose mentioning token is not major" "$(__commit_bump $'chore: docs say breaking (! or BREAKING CHANGE:) -> major')" "patch"
   toBe "type bang is major" "$(__commit_bump $'feat(api)!: drop old flag')" "major"
   toBe "feat is minor" "$(__commit_bump $'feat: add util')" "minor"
   toBe "fix is patch" "$(__commit_bump $'fix(core): bug')" "patch"
@@ -73,9 +84,16 @@ describe "version: __suggest"
   __log=()
   toBe "no commits -> none" "$(__suggest | grep '^bump=')" "bump=none"
 
+  # A breaking commit before the tag must not influence the suggestion: the
+  # range walk must exclude pre-tag history.
+  __log=("a|fix: one")
+  __pre_tag=("z|feat(api)!: old breaking")
+  toBe "pre-tag breaking is excluded -> patch" "$(__suggest | grep '^bump=')" "bump=patch"
+
 describe "version: first release from 0.0.0"
 
   __tags=()
+  __pre_tag=()
   __log=("a|feat: first")
   toBe "no tag suggests minor" "$(__suggest | grep '^bump=')" "bump=minor"
   toBe "no tag next is v0.1.0" "$(__suggest | grep '^next=')" "next=v0.1.0"
@@ -85,6 +103,7 @@ describe "version: first release from 0.0.0"
 describe "version: __resolve"
 
   __tags=(v1.2.3)
+  __pre_tag=()
   __log=("a|feat: x")
   toBe "resolve minor -> v1.3.0" "$(__resolve minor | grep '^next=')" "next=v1.3.0"
   toBe "resolve auto -> v1.3.0" "$(__resolve auto | grep '^next=')" "next=v1.3.0"
