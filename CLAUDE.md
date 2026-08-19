@@ -72,6 +72,16 @@ Semantic tokens: `error`, `warn`, `info`, `header`, `command`, `option`, `arg`, 
 
 Color is emitted only when the target fd is a TTY, `TERM` is not `dumb`/empty, and `NO_COLOR` is unset; otherwise text is printed plain and `style_rich` strips its markup. `spu <util> --help`/`-h` and error messages route through this helper; the `license` util's rendered LICENSE body stays plain (no styling) so the emitted text remains valid and portable.
 
+## CI/CD
+
+GitHub Actions provides the CI/CD pipeline via `.github/workflows/ci.yml` (validation) and `.github/workflows/cd.yml` (release), kept decoupled.
+
+**CI** — `push`/`pull_request` to `main` (tags ignored). A `lint` and `test` job, each on a `macos-latest`/`ubuntu-latest` matrix, call the project's own `scripts/lint.sh` and `scripts/test.sh`; the lint job installs `zsh-lint` first via `actions/setup-go` + `go install github.com/z-shell/zsh-lint/cmd/zsh-lint@latest`. A `suggest` job (push to `main` only) runs `scripts/version.sh suggest` and writes the suggested next version to the job summary. Pass/fail is signalled purely by exit codes — the scripts already exit non-zero on failure, so no step outputs are needed for the CI gate.
+
+**CD** — `workflow_dispatch` with a `bump` choice input (`auto`/`major`/`minor`/`patch`), gated to `main`. It runs `scripts/version.sh resolve <bump>` to get the final version, tags the bare `main` HEAD with `vX.Y.Z` (pushed with `GITHUB_TOKEN`, which does not re-trigger workflows), and publishes a GitHub Release via `softprops/action-gh-release`.
+
+**Versioning** — `scripts/version.sh` derives the bump from Conventional Commits since the latest tag: breaking change (`!` or a `BREAKING CHANGE:` footer) → major; `feat` → minor; any other conventional commit → patch; none → no release. With no tag yet the base is `0.0.0` (`major` → `v1.0.0`, `minor` → `v0.1.0`, `patch` → `v0.0.1`). Tags follow `vX.Y.Z`. The logic is covered by `test/version.spec.sh`.
+
 ## Git conventions
 
 ### Commits

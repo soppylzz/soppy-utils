@@ -1,0 +1,50 @@
+name: Lint & Test
+
+on:
+  push:
+    branches: [main]
+    tags-ignore: ['**']
+  pull_request:
+
+jobs:
+  lint:
+    name: lint (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+      - name: install zsh-lint
+        run: go install github.com/z-shell/zsh-lint/cmd/zsh-lint@latest
+      - name: lint
+        run: zsh scripts/lint.sh
+
+  test:
+    name: test (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: test
+        run: zsh scripts/test.sh
+
+  suggest:
+    name: suggest next version
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [lint, test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: suggest
+        run: |
+          zsh scripts/version.sh suggest >> "$GITHUB_STEP_SUMMARY"
