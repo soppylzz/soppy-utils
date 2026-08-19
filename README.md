@@ -1,4 +1,15 @@
-# soppy-utils
+<p align="center">
+  <img src="assets/icon.png" alt="soppy-utils" width="150"/>
+</p>
+
+<h1 align="center">soppy-utils</h1>
+<center>
+
+![zsh-compatible](https://img.shields.io/badge/shell-zsh-brightgreen)
+![license](https://img.shields.io/badge/license-MIT-green)
+
+</center>
+
 
 An engineering-focused collection of zsh utilities for automating common development tasks. Each tool is a zsh script; tools are installed onto `PATH` via the install script so they can be invoked as commands.
 

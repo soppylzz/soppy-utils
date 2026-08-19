@@ -1,4 +1,14 @@
-# soppy-utils
+<p align="center">
+  <img src="assets/icon.png" alt="soppy-utils" width="150"/>
+</p>
+
+<h1 align="center">soppy-utils</h1>
+<center>
+
+![zsh-compatible](https://img.shields.io/badge/shell-zsh-brightgreen)
+![license](https://img.shields.io/badge/license-MIT-green)
+
+</center>
 
 一个面向工程的 zsh 工具集合，用于自动化常见的开发任务。每个工具都是一个 zsh 脚本；工具通过安装脚本安装到 `PATH` 上，之后即可当作命令调用。
 
