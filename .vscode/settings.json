@@ -1,0 +1,5 @@
+{
+  // because it only support ` sh/bash/dash/ksh` scripts:
+  // - due to https://www.shellcheck.net/wiki/SC1071
+  "shellcheck.enable": false
+}

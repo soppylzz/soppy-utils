@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Read",
+      "Glob",
+      "Grep",
+      "Edit",
+      "Write",
+      "Bash(zsh:*)",
+      "Bash(git:*)",
+      "Bash(zsh-lint:*)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)"
+    ],
+    "ask": [
+      "Bash(git commit:*)"
+    ],
+    "deny": [
+      "Bash(rm -rf:*)",
+      "Read(./.env*)",
+      "Read(./**/.env*)",
+      "Read(./secrets/**)",
+      "Edit(./.env*)",
+      "Bash(curl * | bash:*)"
+    ],
+    "defaultMode": "acceptEdits"
+  },
+  "cleanupPeriodDays": 30
+}
