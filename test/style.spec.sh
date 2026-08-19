@@ -14,8 +14,9 @@ run_pty() {
   local style_path="$1" code="$2"
   # macOS `script` writes a prologue (`^D^H^H`) and CRLF line endings; the
   # assertions below only check for the presence of ESC sequences, so neither
-  # artifact matters.
-  script -q /dev/null zsh -c "$code" -- "$style_path" 2>&1
+  # artifact matters. TERM is forced to a color-capable value so the CI default
+  # (TERM=dumb) does not suppress color and mask the tty path.
+  TERM=xterm-256color script -q /dev/null zsh -c "$code" -- "$style_path" 2>&1
 }
 
 describe "style: plain (non-tty) output"

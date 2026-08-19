@@ -27,7 +27,8 @@ jobs:
 
       - name: resolve version
         id: version
-        run: zsh scripts/version.sh resolve '${{ inputs.bump }}'
+        shell: zsh
+        run: scripts/version.sh resolve '${{ inputs.bump }}'
 
       - name: create and push tag
         if: steps.version.outputs.bump != 'none'
