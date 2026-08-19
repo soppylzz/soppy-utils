@@ -25,10 +25,12 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: install zsh (ubuntu)
+        run: sudo apt-get update && sudo apt-get install -y zsh
+
       - name: resolve version
         id: version
-        shell: zsh
-        run: scripts/version.sh resolve '${{ inputs.bump }}'
+        run: zsh scripts/version.sh resolve '${{ inputs.bump }}'
 
       - name: create and push tag
         if: steps.version.outputs.bump != 'none'

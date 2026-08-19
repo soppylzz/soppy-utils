@@ -25,8 +25,7 @@ jobs:
       - name: install zsh-lint
         run: go install github.com/z-shell/zsh-lint/cmd/zsh-lint@latest
       - name: lint
-        shell: zsh
-        run: scripts/lint.sh
+        run: zsh scripts/lint.sh
 
   test:
     name: test (${{ matrix.os }})
@@ -41,8 +40,7 @@ jobs:
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y zsh
       - name: test
-        shell: zsh
-        run: scripts/test.sh
+        run: zsh scripts/test.sh
 
   suggest:
     name: suggest next version
@@ -56,6 +54,5 @@ jobs:
       - name: install zsh (ubuntu)
         run: sudo apt-get update && sudo apt-get install -y zsh
       - name: suggest
-        shell: zsh
         run: |
-          scripts/version.sh suggest >> "$GITHUB_STEP_SUMMARY"
+          zsh scripts/version.sh suggest >> "$GITHUB_STEP_SUMMARY"
