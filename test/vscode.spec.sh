@@ -9,9 +9,14 @@ source "${0:A:h}/../src/vscode.sh"
 __code_arg=""
 code() { __code_arg="$1"; }
 
-# Deterministic HOME so expected paths are stable.
+# Deterministic HOME so expected paths are stable; the expected user dir must
+# match the OS branch in vscode.sh.
 HOME="/tmp/soppy-utils-test-home"
-__user_dir="$HOME/Library/Application Support/Code/User"
+case "$OSTYPE" in
+  darwin*) __user_dir="$HOME/Library/Application Support/Code/User" ;;
+  linux*)  __user_dir="$HOME/.config/Code/User" ;;
+  *)       __user_dir="$HOME/Code/User" ;;
+esac
 
 describe "vscode: target mapping"
 

@@ -9,7 +9,8 @@ source "$__vscode_dir/usage/vscode.zsh"
 
 # vscode <target>
 #
-# The low-level function takes a single target name:
+# The low-level function takes a single target name and opens the mapped VS Code
+# user path with `code`. The user directory is resolved per OS:
 #   snippets — the snippets directory
 #   settings — settings.json
 #   keys     — keybindings.json
@@ -20,6 +21,9 @@ vscode() {
   case "$OSTYPE" in
     darwin*)
       vscode_user_dir="$HOME/Library/Application Support/Code/User"
+      ;;
+    linux*)
+      vscode_user_dir="$HOME/.config/Code/User"
       ;;
     *)
       err "unsupported os: $OSTYPE"
