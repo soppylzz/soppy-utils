@@ -1,147 +1,60 @@
+<h1 align="center"><img width="60%" src="./assets/wordmark.png" alt="soppy-utils" /></h1>
+
 <p align="center">
-  <img src="assets/icon.png" alt="soppy-utils" width="150"/>
+  <a href="https://github.com/soppylzz/soppy-utils/releases"><img src="https://img.shields.io/github/v/release/soppylzz/soppy-utils" alt="Latest GitHub release" /></a>
+  <img src="https://img.shields.io/badge/shell-zsh-89E051" alt="zsh" />
 </p>
 
-<h1 align="center">soppy-utils</h1>
-<center>
+<div align="center">
 
-![zsh-compatible](https://img.shields.io/badge/shell-zsh-brightgreen)
-![license](https://img.shields.io/badge/license-MIT-green)
+[English](README.md) | [简体中文](README.zh-cn.md)
 
-</center>
+</div>
 
+A collection of zsh commands for everyday development tasks, available through one `spu` command.
 
-An engineering-focused collection of zsh utilities for automating common development tasks. Each tool is a zsh script; tools are installed onto `PATH` via the install script so they can be invoked as commands.
+## Features
 
-All tools are invoked through a single `spu` entry point:
-
-```sh
-spu <util> [...args]
-```
-
-Built-in tools:
-
-| Tool | Description |
+| Command | Purpose |
 | --- | --- |
-| `vscode` | Open VS Code configuration files/directories quickly |
-| `license` | Generate a LICENSE text from a template |
-
-## Overview
-
-soppy-utils is a personal zsh development toolkit (by soppylzz) for handling miscellaneous development tasks.
-
-Directory structure:
-
-```
-.
-├── bin/            # Entry points (thin dispatchers)
-├── src/            # Tool implementations and shared helpers
-│   ├── usage/      # Help text, one file per tool + overview
-│   ├── utils/      # Shared helpers
-│   └── template/   # LICENSE templates (data, not logic)
-├── scripts/        # Install/uninstall and development helpers
-├── test/           # zsh test suite
-│   └── general/    # Shared test primitives
-└── plan/           # Requirement documents, one per demand
-```
-
-`bin/` holds only the thin `spu` launcher; all logic lives under `src/`, where each tool is one implementation plus a shared helper set. Help text is centralized in `src/usage/` and built via the `create_usager` factory, reusable helpers live in `src/utils/`, and LICENSE data lives in `src/template/`. `scripts/` contains the install/uninstall and development scripts, `test/` the zsh specs and shared primitives, and `plan/` the requirement documents (one per demand).
+| `spu vscode` | Open VS Code settings, keyboard shortcuts, or snippets |
+| `spu license` | Generate an MIT or ISC license from a template |
 
 ## Installation
 
-Installation copies the project into `~/.local/share/soppy-utils` and symlinks `bin/spu` to `~/.local/bin/spu`.
-
-### Option 1: git clone, then install
-
-```sh
-git clone https://github.com/soppylzz/soppy-utils.git
-cd soppy-utils
-./scripts/install.sh
-```
-
-The script copies the project into the install directory, creates the symlink, then removes the original clone directory.
-
-### Option 2: one-line curl install
+The installer copies the project to `~/.local/share/soppy-utils` and links `spu` into `~/.local/bin`.
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/soppylzz/soppy-utils/main/scripts/install.sh | zsh
 ```
 
-- With `git` available: the script silently `git clone`s into the install directory.
-- Without `git`: the script downloads and extracts the tarball from GitHub via `curl`.
+Alternatively, clone the repository and run `./scripts/install.sh`. The installer may remove a clean source clone after copying it; keep a working checkout with uncommitted changes if you want it retained.
 
-After installation, if `~/.local/bin` is not on your `PATH`, the script prints a hint. Add this line to your `~/.zshrc`:
+Add `~/.local/bin` to your `PATH` if the installer prompts you:
 
 ```sh
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
-## Uninstall
+## Usage
 
-Run the uninstall script from the install directory:
+```sh
+spu --help
+spu vscode --settings
+spu vscode --keys
+spu vscode --snippets
+spu license --mit
+spu license --isc --output LICENSE
+```
+
+Run `spu <command> --help` for all options. `spu license` uses `git config user.name` or `$USER` for the author and the current year for the date.
+
+## Uninstall
 
 ```sh
 ~/.local/share/soppy-utils/scripts/uninstall.sh
 ```
 
-It removes the `~/.local/bin/spu` symlink and the `~/.local/share/soppy-utils` directory.
+## License
 
-## Usage
-
-Show the overview:
-
-```sh
-spu
-# or
-spu --help
-```
-
-Output:
-
-```
-Usage: spu <util> [...args]
-
-Utils:
-  vscode — open VS Code configuration files quickly
-  license — generate a LICENSE text from a template
-```
-
-### spu vscode
-
-```sh
-spu vscode [OPTION]
-```
-
-| Option | Description |
-| --- | --- |
-| `-S`, `--snippets` | Open the VS Code snippets directory |
-| `-s`, `--settings` | Open VS Code `settings.json` |
-| `-k`, `--keys` | Open VS Code `keybindings.json` |
-| `-h` | Show brief help |
-| `--help` | Show detailed help |
-
-```sh
-spu vscode --settings
-spu vscode -k
-```
-
-### spu license
-
-```sh
-spu license [OPTION]
-```
-
-| Option | Description |
-| --- | --- |
-| `-M`, `--mit` | Generate an MIT license |
-| `-I`, `--isc` | Generate an ISC license |
-| `-o`, `--output <file>` | Write the license to `<file>` instead of stdout |
-| `-h` | Show brief help |
-| `--help` | Show detailed help |
-
-The author name comes from `git config user.name` (falling back to `$USER` when missing), and the year comes from `date`.
-
-```sh
-spu license --mit
-spu license --isc --output LICENSE
-```
+[MIT](./LICENSE).
