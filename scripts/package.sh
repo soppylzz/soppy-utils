@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+version="${1:-dev}"
+out_dir="${2:-$repo_root/dist}"
+
+mkdir -p "$out_dir"
+work="$(mktemp -d)"
+trap 'rm -r -- "$work"' EXIT
+: >"$out_dir/SHA256SUMS"
+
+targets="${SPU_PACKAGE_TARGETS:-darwin/amd64 darwin/arm64 linux/amd64 linux/arm64 windows/amd64 windows/arm64}"
+for target in $targets; do
+  os="${target%/*}"
+  arch="${target#*/}"
+  package="spu-$version-$os-$arch"
+  stage="$work/$package"
+
+  mkdir -p "$stage/bin" "$stage/src/utils" "$stage/scripts" "$stage/libexec"
+  cp "$repo_root/bin/spu" "$stage/bin/spu"
+  cp "$repo_root/src/spu.sh" "$repo_root/src/vscode.sh" "$stage/src/"
+  cp "$repo_root/src/utils/style.sh" "$stage/src/utils/"
+  cp "$repo_root/scripts/update.sh" "$repo_root/scripts/install.sh" "$repo_root/scripts/uninstall.sh" "$stage/scripts/"
+
+  suffix=''
+  [[ "$os" == windows ]] && suffix='.exe'
+  (cd "$repo_root" && GOOS="$os" GOARCH="$arch" CGO_ENABLED=0 go build -ldflags "-X main.version=$version" -o "$stage/libexec/spu-helper$suffix" ./cmd/spu-helper)
+  tar -czf "$out_dir/$package.tar.gz" -C "$stage" .
+
+  if command -v sha256sum >/dev/null 2>&1; then
+    (cd "$out_dir" && sha256sum "$package.tar.gz") >>"$out_dir/SHA256SUMS"
+  else
+    digest="$(shasum -a 256 "$out_dir/$package.tar.gz" | cut -d ' ' -f 1)"
+    printf '%s  %s\n' "$digest" "$package.tar.gz" >>"$out_dir/SHA256SUMS"
+  fi
+done

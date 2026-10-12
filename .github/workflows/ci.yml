@@ -8,51 +8,57 @@ on:
 
 jobs:
   lint:
-    name: lint (${{ matrix.os }})
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [macos-latest, ubuntu-latest]
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - name: install zsh (ubuntu)
-        if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y zsh
       - uses: actions/setup-go@v5
         with:
-          go-version: 'stable'
-      - name: install zsh-lint
-        run: go install github.com/z-shell/zsh-lint/cmd/zsh-lint@latest
-      - name: lint
-        run: zsh scripts/lint.sh
+          go-version-file: go.mod
+      - run: sudo apt-get update && sudo apt-get install -y shellcheck
+      - run: go install mvdan.cc/sh/v3/cmd/shfmt@v3.12.0
+      - run: bash scripts/lint.sh
 
   test:
-    name: test (${{ matrix.os }})
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, ubuntu-latest]
-    runs-on: ${{ matrix.os }}
+        include:
+          - { runner: macos-15-intel, target: darwin/amd64 }
+          - { runner: macos-15, target: darwin/arm64 }
+          - { runner: ubuntu-24.04, target: linux/amd64 }
+          - { runner: ubuntu-24.04-arm, target: linux/arm64 }
+          - { runner: windows-2025, target: windows/amd64 }
+          - { runner: windows-11-arm, target: windows/arm64 }
+    name: test (${{ matrix.target }})
+    runs-on: ${{ matrix.runner }}
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
-      - name: install zsh (ubuntu)
-        if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y zsh
-      - name: test
-        run: zsh scripts/test.sh
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: bash scripts/test.sh
+      - name: native archive smoke test
+        env:
+          SPU_PACKAGE_TARGETS: ${{ matrix.target }}
+        run: |
+          set -e
+          artifacts="$(mktemp -d)"
+          isolated_home="$(mktemp -d)"
+          bash scripts/package.sh v0.0.0 "$artifacts"
+          archive="$artifacts/spu-v0.0.0-${SPU_PACKAGE_TARGETS//\//-}.tar.gz"
+          HOME="$isolated_home" bash scripts/install.sh --archive "$archive"
+          HOME="$isolated_home" bash "$isolated_home/.local/bin/spu" --version
+          HOME="$isolated_home" bash "$isolated_home/.local/bin/spu" license --mit --name Smoke --year 2026 >/dev/null
 
   suggest:
-    name: suggest next version
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: [lint, test]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: install zsh (ubuntu)
-        run: sudo apt-get update && sudo apt-get install -y zsh
-      - name: suggest
-        run: |
-          zsh scripts/version.sh suggest >> "$GITHUB_STEP_SUMMARY"
+      - run: bash scripts/version.sh suggest >> "$GITHUB_STEP_SUMMARY"

@@ -1,5 +1,39 @@
 {
-  // because it only support ` sh/bash/dash/ksh` scripts:
-  // - due to https://www.shellcheck.net/wiki/SC1071
-  "shellcheck.enable": false
+  "go.formatTool": "gofmt",
+  "[go]": {
+    "editor.defaultFormatter": "golang.go",
+    "editor.formatOnSave": true
+  },
+
+  "shellcheck.enable": true,
+  "shellcheck.customArgs": [
+    "-S",
+    "warning"
+  ],
+  "shfmt.executableArgs": [
+    "-i",
+    "2"
+  ],
+  "[shellscript]": {
+    "editor.defaultFormatter": "mkhl.shfmt",
+    "editor.formatOnSave": true,
+    "editor.detectIndentation": false,
+    "editor.insertSpaces": true,
+    "editor.tabSize": 2
+  },
+
+  "json.format.enable": true,
+  "json.format.keepLines": true,
+  "[json]": {
+    "editor.defaultFormatter": "vscode.json-language-features",
+    "editor.formatOnSave": true,
+    "editor.tabSize": 2,
+    "editor.insertSpaces": true
+  },
+  "[jsonc]": {
+    "editor.defaultFormatter": "vscode.json-language-features",
+    "editor.formatOnSave": true,
+    "editor.tabSize": 2,
+    "editor.insertSpaces": true
+  },
 }

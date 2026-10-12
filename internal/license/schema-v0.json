@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": [
+    "util",
+    "schema_version",
+    "data"
+  ],
+  "properties": {
+    "util": {
+      "const": "license"
+    },
+    "schema_version": {
+      "const": 0
+    },
+    "data": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "enum": [
+            "mit",
+            "isc"
+          ]
+        },
+        "author": {
+          "type": "string"
+        },
+        "output": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

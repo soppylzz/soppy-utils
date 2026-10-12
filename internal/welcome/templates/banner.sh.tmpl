@@ -1,0 +1,59 @@
+_spu_welcome_banner() {
+  local w=${COLUMNS:-}
+  if [[ ! $w =~ ^[1-9][0-9]*$ ]]; then
+    w=$(stty size 2>/dev/null </dev/tty | awk '{print $2}')
+  fi
+  [[ $w =~ ^[1-9][0-9]*$ ]] || w=80
+
+  local have_figlet=0 have_speed=0 have_slant=0 have_fastfetch=0 figlet_text
+  command -v figlet >/dev/null 2>&1 && have_figlet=1
+  [[ -r "$HOME/.figlet/fonts/speed.flf" ]] && have_speed=1
+  [[ -r "$HOME/.figlet/fonts/smslant.flf" ]] && have_slant=1
+  command -v fastfetch >/dev/null 2>&1 && have_fastfetch=1
+
+  {
+    if (( have_figlet && have_speed )) && figlet_text=$(figlet -f "$HOME/.figlet/fonts/speed.flf" "$_spu_welcome_name" 2>/dev/null); then
+      printf '%s\n' "$figlet_text"
+    else
+      printf '%s\n' "$_spu_welcome_name"
+    fi
+    printf '\001\001\n'
+    if (( have_figlet && have_slant )) && figlet_text=$(figlet -f "$HOME/.figlet/fonts/smslant.flf" "$_spu_welcome_device" 2>/dev/null); then
+      printf '%s\n' "$figlet_text"
+    else
+      printf '%s\n' "$_spu_welcome_device"
+    fi
+    printf '\001\001\n'
+    printf '\n%s\n' "$_spu_welcome_message"
+  } 2>/dev/null \
+    | LC_ALL=en_US.UTF-8 awk -v w="$w" -v sep="$(printf '\001\001')" '
+    function flush(  i, l, t, d, max, pad) {
+      max = 0
+      for (i = 1; i <= bn; i++) {
+        l = buf[i]
+        sub(/[ \t]+$/, "", l)
+        t = l
+        d = length(l) + gsub(/[^ -~]/, "", t)
+        if (d > max) max = d
+      }
+      pad = (max < w) ? int((w - max) / 2) : 0
+      for (i = 1; i <= bn; i++) {
+        l = buf[i]
+        sub(/[ \t]+$/, "", l)
+        if (l == "") { print ""; continue }
+        printf "\033[35m%*s%s\033[0m\n", pad, "", l
+      }
+      bn = 0
+    }
+    $0 == sep { flush(); next }
+    { buf[++bn] = $0 }
+    END { flush() }'
+
+  if (( have_fastfetch )); then
+    fastfetch 2>/dev/null || :
+  fi
+}
+
+_spu_welcome_banner
+unset -f _spu_welcome_banner
+unset _spu_welcome_name _spu_welcome_device _spu_welcome_message

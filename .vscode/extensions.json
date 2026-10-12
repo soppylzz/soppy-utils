@@ -1,5 +1,7 @@
 {
-  "unwantedRecommendations": [
+  "recommendations": [
+    "golang.go",
+    "mkhl.shfmt",
     "timonwong.shellcheck"
   ]
 }

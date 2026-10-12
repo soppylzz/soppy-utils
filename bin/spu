@@ -1,13 +1,5 @@
-#!/usr/bin/env zsh
+#!/usr/bin/env bash
 
-# spu — the soppy-utils launcher.
-#
-# Single entry point: `spu <util> [...args]`. Dispatch and per-tool logic live
-# in src/; this wrapper only sources the dispatcher and forwards arguments.
-
-__spu_dir="${(%):-%x}"
-__spu_dir="${__spu_dir:A:h}"
-
-source "$__spu_dir/../src/spu.zsh"
-
+spu_bin_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)" || exit 1
+source "$spu_bin_dir/../src/spu.sh"
 spu "$@"

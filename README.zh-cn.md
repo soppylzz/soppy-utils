@@ -1,9 +1,6 @@
 <h1 align="center"><img width="60%" src="./assets/wordmark.png" alt="soppy-utils" /></h1>
 
-<p align="center">
-  <a href="https://github.com/soppylzz/soppy-utils/releases"><img src="https://img.shields.io/github/v/release/soppylzz/soppy-utils" alt="Latest GitHub release" /></a>
-  <img src="https://img.shields.io/badge/shell-zsh-89E051" alt="zsh" />
-</p>
+<p align="center"><img src="https://img.shields.io/badge/shell-Bash-89E051" alt="Bash 运行环境" /></p>
 
 <div align="center">
 
@@ -11,50 +8,86 @@
 
 </div>
 
-一组用于日常开发任务的 zsh 命令，通过统一的 `spu` 入口调用。
+`spu` 用一条命令收纳常用的开发工具。启动器基于 Bash 3.2；许可证、欢迎横幅和 Git 全局配置由 Go 程序处理。发布流程面向 macOS、Linux 的 amd64/arm64，以及 Windows Git Bash 的 amd64/arm64。未来的发布版二进制无需安装 Go。
 
-## 特性
+## 命令
 
 | 命令 | 用途 |
 | --- | --- |
 | `spu vscode` | 打开 VS Code 设置、快捷键配置或代码片段目录 |
-| `spu license` | 根据模板生成 MIT 或 ISC 许可证 |
+| `spu license` | 用命令行参数或终端表单生成 MIT、ISC 许可证 |
+| `spu welcome` | 生成欢迎横幅，可选接入 Bash 或 Zsh |
+| `spu git` | 通过单个 `include.path` 管理 Git 全局默认配置 |
+| `spu update` | 更新已安装的发布版并报告配置版本差异 |
 
-## 安装
+## 试用当前源码
 
-安装脚本会将项目复制到 `~/.local/share/soppy-utils`，并将 `spu` 链接到 `~/.local/bin`。
-
-```sh
-curl -fsSL https://raw.githubusercontent.com/soppylzz/soppy-utils/main/scripts/install.sh | zsh
-```
-
-也可以克隆仓库后运行 `./scripts/install.sh`。安装脚本在复制完成后可能删除没有未提交改动的源码目录；如果需要保留工作副本，请先确认安装方式。
-
-若安装脚本提示 `~/.local/bin` 不在 `PATH` 中，可添加：
+[目前公开的最新版本](https://github.com/soppylzz/soppy-utils/releases)仍是旧版 Zsh 实现，尚未包含 Bash + Go 预编译包。现在要使用本文介绍的命令，需要 Go 1.24.2 或更新版本，从当前源码运行：
 
 ```sh
-export PATH="$HOME/.local/bin:$PATH"
+git clone https://github.com/soppylzz/soppy-utils.git
+cd soppy-utils
+bash bin/spu license --mit --name 'Ada Lovelace' --year 2026
 ```
+
+如需安装本地构建，先运行 `bash scripts/package.sh v0.0.0 dist`，再选择与系统及架构匹配的压缩包：
+
+```sh
+bash scripts/install.sh --archive dist/spu-v0.0.0-darwin-arm64.tar.gz
+```
+
+示例压缩包适用于 Apple 芯片 Mac。其他平台请替换为 `darwin-amd64`、`linux-amd64`、`linux-arm64`、`windows-amd64` 或 `windows-arm64`。安装器会用 `dist/SHA256SUMS` 校验压缩包，然后将 `spu` 放到 `~/.local/bin`；如有需要，请将该目录加入 `PATH`。源码目录不会被删除。
+
+首个 Bash + Go 发布版提供压缩包和 `SHA256SUMS` 后，新用户可下载并运行[安装器](scripts/install.sh)，无需安装 Go：
+
+```sh
+curl -fsSLo install-spu.sh https://raw.githubusercontent.com/soppylzz/soppy-utils/main/scripts/install.sh
+bash install-spu.sh
+```
+
+已安装发布版的用户可运行 `spu update`。旧版 Zsh 安装没有这个命令；新版本发布后，可以先用安装器的 `--upgrade` 参数升级一次。
 
 ## 使用
 
 ```sh
-spu --help
 spu vscode --settings
-spu vscode --keys
-spu vscode --snippets
-spu license --mit
 spu license --isc --output LICENSE
+spu license                    # 终端表单
+spu welcome install --rc zsh
+spu welcome status
+spu git install
+spu git edit
+spu update --status
 ```
 
-完整选项见 `spu <command> --help`。`spu license` 使用 `git config user.name`（缺失时使用 `$USER`）作为作者，年份取当前年份。
+运行 `spu <命令> --help` 可查看选项。`spu license --mit` 和 `--isc` 默认只向标准输出写入许可证文本；指定 `--output` 才写入文件。在终端中直接运行 `spu license` 会打开表单，并可保存常用的类型、作者和输出路径。更新程序或编辑偏好不会重写已有的 LICENSE 文件。
+
+`spu welcome install` 生成 `~/.config/soppy-utils/welcome/welcome.sh`，还可以在 `~/.bashrc`、`~/.zshrc`、两者或都不接入（`--rc none`）写入受管理的启动区块。横幅只在交互式 Shell 启动时显示；非交互运行保持静默。`spu welcome edit` 修改保存的内容，更新程序后再次运行 `install` 可刷新生成脚本。以前的 `~/.config/soppy-utils/welcome.sh` 在校验通过后可用 `spu welcome migrate` 接管。如果旧的 `$SOPPY/shell/welcome.sh` 引用造成重复横幅，需要手动从 rc 文件中移除。
+
+FIGlet 和 fastfetch 都是可选工具。缺少 FIGlet 或自定义字体 `speed.flf`、`smslant.flf` 时，横幅会显示普通文字；缺少 fastfetch 时跳过系统信息。`spu welcome status` 可查看当前状态。`spu` 不会自动安装这些工具。
+
+`spu git install` 在 Git **全局**配置中注册 `~/.config/soppy-utils/git-custom-ini.gitconfig`。`spu git uninstall` 仅移除匹配的引用和未被改动的受管理文件，不会修改仓库本地设置。使用 VS Code 作为编辑、差异或合并工具时需要 `code` 命令。
+
+每个 Go 工具在 `~/.config/soppy-utils/<util>/` 下保存 `VERSION` 与 `config.json`。`VERSION` 是该工具的配置格式版本，与程序发布版本无关。`spu update` 遇到差异只提示，不打开表单，也不重写偏好或生成文件。对于已知的旧配置，普通命令在内存中补默认值；运行 `spu <util> migrate` 或 `edit` 后才会保存更新。自动化场景可运行 `spu <util> migrate --answers FILE`，其中 JSON 对象须包含 `util`、当前 `schema_version` 和 `data`。
 
 ## 卸载
 
 ```sh
-~/.local/share/soppy-utils/scripts/uninstall.sh
+bash ~/.local/share/soppy-utils/scripts/uninstall.sh
+bash ~/.local/share/soppy-utils/scripts/uninstall.sh --purge
 ```
+
+默认卸载删除程序和启动器，保留偏好、生成文件、欢迎横幅启动区块及 Git 全局引用。`--purge` 还会删除保存的默认选项、受管理的欢迎横幅区块与文件，以及 Git 全局引用。若受管理的生成文件被修改，清理会停止，程序仍保留；此前已完成的清理步骤不会自动撤销。
+
+## 开发
+
+```sh
+bash scripts/test.sh
+bash scripts/lint.sh
+```
+
+开发需要 Go 1.24.2 或更新版本；lint 还需要 ShellCheck 和 shfmt。Windows 命令在 Git Bash 中运行。
 
 ## 许可证
 
-[MIT](./LICENSE)。
+[MIT](LICENSE)。

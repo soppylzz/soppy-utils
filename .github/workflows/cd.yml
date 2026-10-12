@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       bump:
-        description: 'version bump'
+        description: version bump
         required: true
         type: choice
         default: auto
@@ -16,33 +16,74 @@ permissions:
 concurrency: release
 
 jobs:
-  release:
-    name: release
+  smoke:
     if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { runner: macos-15-intel, target: darwin/amd64 }
+          - { runner: macos-15, target: darwin/arm64 }
+          - { runner: ubuntu-24.04, target: linux/amd64 }
+          - { runner: ubuntu-24.04-arm, target: linux/arm64 }
+          - { runner: windows-2025, target: windows/amd64 }
+          - { runner: windows-11-arm, target: windows/arm64 }
+    runs-on: ${{ matrix.runner }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: bash scripts/test.sh
+      - name: native archive smoke test
+        env:
+          SPU_PACKAGE_TARGETS: ${{ matrix.target }}
+        run: |
+          set -e
+          artifacts="$(mktemp -d)"
+          isolated_home="$(mktemp -d)"
+          bash scripts/package.sh v0.0.0 "$artifacts"
+          archive="$artifacts/spu-v0.0.0-${SPU_PACKAGE_TARGETS//\//-}.tar.gz"
+          HOME="$isolated_home" bash scripts/install.sh --archive "$archive"
+          HOME="$isolated_home" bash "$isolated_home/.local/bin/spu" --version
+
+  release:
+    needs: smoke
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - name: install zsh (ubuntu)
-        run: sudo apt-get update && sudo apt-get install -y zsh
-
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
       - name: resolve version
         id: version
-        run: zsh scripts/version.sh resolve '${{ inputs.bump }}'
-
-      - name: create and push tag
+        run: bash scripts/version.sh resolve '${{ inputs.bump }}'
+      - name: build and validate assets
         if: steps.version.outputs.bump != 'none'
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag "${{ steps.version.outputs.next }}"
-          git push origin "${{ steps.version.outputs.next }}"
-
+          bash scripts/package.sh '${{ steps.version.outputs.next }}' dist
+          test "$(find dist -name 'spu-*.tar.gz' | wc -l | tr -d ' ')" = 6
+          test "$(wc -l < dist/SHA256SUMS | tr -d ' ')" = 6
+      - name: create tag
+        if: steps.version.outputs.bump != 'none'
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          if git rev-parse '${{ steps.version.outputs.next }}' >/dev/null 2>&1; then
+            test "$(git rev-parse '${{ steps.version.outputs.next }}^{commit}')" = "$(git rev-parse HEAD)"
+          else
+            git tag '${{ steps.version.outputs.next }}'
+            git push origin '${{ steps.version.outputs.next }}'
+          fi
       - name: publish release
         if: steps.version.outputs.bump != 'none'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.next }}
           generate_release_notes: true
+          files: dist/*

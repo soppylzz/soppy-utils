@@ -1,61 +1,50 @@
-#!/usr/bin/env zsh
+#!/usr/bin/env bash
 
-# vscode — open a VS Code configuration target with the `code` command.
-
-__vscode_dir="${(%):-%N}"
-__vscode_dir="${__vscode_dir:A:h}"
-
-source "$__vscode_dir/usage/vscode.zsh"
-
-# vscode <target>
-#
-# The low-level function takes a single target name and opens the mapped VS Code
-# user path with `code`. The user directory is resolved per OS:
-#   snippets — the snippets directory
-#   settings — settings.json
-#   keys     — keybindings.json
-vscode() {
-  local target="$1"
-  local vscode_user_dir
-
-  case "$OSTYPE" in
-    darwin*)
-      vscode_user_dir="$HOME/Library/Application Support/Code/User"
-      ;;
-    linux*)
-      vscode_user_dir="$HOME/.config/Code/User"
-      ;;
-    *)
-      err "unsupported os: $OSTYPE"
-      return 1
-      ;;
-  esac
-
-  case "$target" in
-    snippets) code "$vscode_user_dir/snippets" ;;
-    settings) code "$vscode_user_dir/settings.json" ;;
-    keys)     code "$vscode_user_dir/keybindings.json" ;;
-    *)
-      err "unknown target: $target"
-      return 1
-      ;;
-  esac
-}
-
-# vscode_main [...args]
-#
-# CLI entry point: maps flags to target names and dispatches to `vscode`.
 vscode_main() {
-  case "${1:-}" in
-    --snippets|-S) vscode snippets ;;
-    --settings|-s) vscode settings ;;
-    --keys|-k)     vscode keys     ;;
-    --help)        usage_vscode true ;;
-    -h|"")         usage_vscode false ;;
-    *)
-      err "vscode: unknown option: $1"
-      usage_vscode true >&2
-      return 1
-      ;;
+  local target="${1:-}" user_dir path
+  if [[ $# -gt 1 ]]; then
+    printf '%s\n' 'vscode: too many arguments' >&2
+    return 1
+  fi
+  case "$target" in
+  -h | '')
+    printf '%s\n' 'vscode: open VS Code configuration files'
+    return 0
+    ;;
+  --help)
+    printf '%s\n' 'Usage: spu vscode -S|--snippets|-s|--settings|-k|--keys'
+    return 0
+    ;;
+  -S | --snippets | -s | --settings | -k | --keys) ;;
+  *)
+    printf 'vscode: unknown option: %s\n' "$target" >&2
+    return 1
+    ;;
   esac
+  case "${OSTYPE:-}" in
+  darwin*) user_dir="$HOME/Library/Application Support/Code/User" ;;
+  linux*) user_dir="$HOME/.config/Code/User" ;;
+  msys* | cygwin*)
+    [[ -n "${APPDATA:-}" ]] || {
+      printf '%s\n' 'vscode: APPDATA is required' >&2
+      return 1
+    }
+    user_dir="$APPDATA/Code/User"
+    if command -v cygpath >/dev/null 2>&1; then user_dir="$(cygpath -u "$user_dir")"; fi
+    ;;
+  *)
+    printf 'vscode: unsupported os: %s\n' "${OSTYPE:-unknown}" >&2
+    return 1
+    ;;
+  esac
+  case "$target" in
+  -S | --snippets) path="$user_dir/snippets" ;;
+  -s | --settings) path="$user_dir/settings.json" ;;
+  -k | --keys) path="$user_dir/keybindings.json" ;;
+  esac
+  command -v code >/dev/null 2>&1 || {
+    printf '%s\n' 'vscode: code command is required' >&2
+    return 1
+  }
+  code "$path"
 }
