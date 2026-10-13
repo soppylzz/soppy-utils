@@ -29,9 +29,9 @@ for target in $targets; do
   tar -czf "$out_dir/$package.tar.gz" -C "$stage" .
 
   if command -v sha256sum >/dev/null 2>&1; then
-    (cd "$out_dir" && sha256sum "$package.tar.gz") >>"$out_dir/SHA256SUMS"
+    digest="$(sha256sum "$out_dir/$package.tar.gz" | cut -d ' ' -f 1)"
   else
     digest="$(shasum -a 256 "$out_dir/$package.tar.gz" | cut -d ' ' -f 1)"
-    printf '%s  %s\n' "$digest" "$package.tar.gz" >>"$out_dir/SHA256SUMS"
   fi
+  printf '%s  %s\n' "$digest" "$package.tar.gz" >>"$out_dir/SHA256SUMS"
 done

@@ -120,7 +120,7 @@ else
   cp "$checksum_dir/SHA256SUMS" "$tmp/SHA256SUMS"
 fi
 
-expected="$(awk -v file="$filename" '$2 == file {print $1}' "$tmp/SHA256SUMS")"
+expected="$(tr -d '\r' <"$tmp/SHA256SUMS" | awk -v file="$filename" '$2 == file {print $1}')"
 [[ "$expected" =~ ^[0-9a-fA-F]{64}$ ]] || {
   echo 'install: archive checksum missing or invalid' >&2
   exit 1

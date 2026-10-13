@@ -17,6 +17,14 @@ mkdir -p "$work/home"
 
 SPU_PACKAGE_TARGETS="$target" bash "$root/scripts/dev/package.sh" v0.0.0 "$work/artifacts"
 archive="$work/artifacts/spu-v0.0.0-${target//\//-}.tar.gz"
+manifest="$work/artifacts/SHA256SUMS"
+if LC_ALL=C grep -q $'\r' "$manifest"; then
+  echo 'smoke: package checksum manifest must use LF' >&2
+  exit 1
+fi
+while IFS= read -r line; do printf '%s\r\n' "$line"; done <"$manifest" >"$work/SHA256SUMS.crlf"
+cp "$work/SHA256SUMS.crlf" "$manifest"
+
 HOME="$work/home" bash "$root/scripts/install.sh" --archive "$archive"
 HOME="$work/home" bash "$work/home/.local/bin/spu" --version
 HOME="$work/home" bash "$work/home/.local/bin/spu" license --mit --name Smoke --year 2026 >/dev/null
