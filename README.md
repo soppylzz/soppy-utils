@@ -8,7 +8,7 @@
 
 </div>
 
-`spu` brings a few everyday development tools under one command. Its launcher runs on Bash 3.2; a Go helper handles licenses, welcome banners, and global Git settings. Release packages target Apple Silicon Macs, Ubuntu 24.04 LTS on x64, and Windows 10/11 on x64 with Git Bash. Release binaries will not require Go.
+`spu` brings a few everyday development tools under one command. Its launcher runs on Bash 3.2; a Go helper handles licenses, welcome banners, and global Git settings. Release packages target Apple Silicon Macs, Ubuntu 24.04 LTS on x64, and Windows 10/11 on x64 with Git Bash. Release binaries do not require Go.
 
 ## Commands
 
@@ -20,32 +20,16 @@
 | `spu git` | Manage global Git defaults through one `include.path` |
 | `spu update` | Upgrade an installed release and report config version differences |
 
-## Try the current source
+## Install
 
-The [latest published release](https://github.com/soppylzz/soppy-utils/releases) is the earlier Zsh version and does not yet contain the Bash + Go archives. To use the commands in this README now, build from this checkout with Go 1.24.2 or newer:
-
-```sh
-git clone https://github.com/soppylzz/soppy-utils.git
-cd soppy-utils
-bash bin/spu license --mit --name 'Ada Lovelace' --year 2026
-```
-
-To install a local build, install [go-task](https://taskfile.dev/docs/installation), run `task package VERSION=v0.0.0`, then choose the archive for your OS and architecture:
-
-```sh
-bash scripts/install.sh --archive dist/spu-v0.0.0-darwin-arm64.tar.gz
-```
-
-The example archive is for Apple Silicon. Use `linux-amd64` for Ubuntu 24.04 LTS on x64 or `windows-amd64` for Windows 10/11 on x64. The installer verifies the archive against `dist/SHA256SUMS` and puts `spu` in `~/.local/bin`; add that directory to `PATH` if needed. It leaves the source checkout alone.
-
-After the first Bash + Go release publishes the archives and `SHA256SUMS`, new users can download and run [the installer](scripts/install.sh) without Go:
+The [latest release](https://github.com/soppylzz/soppy-utils/releases/latest) provides precompiled binaries. Download and run [the installer](scripts/install.sh) on a supported platform (Git Bash on Windows):
 
 ```sh
 curl -fsSLo install-spu.sh https://raw.githubusercontent.com/soppylzz/soppy-utils/main/scripts/install.sh
 bash install-spu.sh
 ```
 
-Installed release users can run `spu update`. An older Zsh installation without that command can run the new installer with `--upgrade` once the new release is available.
+The installer selects the matching archive, verifies it against `SHA256SUMS`, and puts `spu` in `~/.local/bin`; add that directory to `PATH` if needed. To upgrade an existing v0.1.0 Zsh installation, run `bash install-spu.sh --upgrade`. After installation, use `spu update` for later releases.
 
 ## Use
 
@@ -81,6 +65,14 @@ The default uninstall removes the package and launcher but preserves preferences
 
 ## Develop
 
+Clone the repository to run from source with Go 1.24.2 or newer:
+
+```sh
+git clone https://github.com/soppylzz/soppy-utils.git
+cd soppy-utils
+bash bin/spu license --mit --name 'Ada Lovelace' --year 2026
+```
+
 ```sh
 task format
 task format:check
@@ -91,7 +83,7 @@ task smoke
 task hooks:install
 ```
 
-Development requires Go 1.24.2 or newer and go-task v3. `task build` writes the native helper to `dist/`; `task package` builds three archives and `SHA256SUMS`. Override the output directory with `OUT_DIR=...`; set `SPU_PACKAGE_TARGETS=darwin/arm64` to package one target. `task smoke` builds and installs the native archive in an isolated temporary home.
+Development requires [go-task](https://taskfile.dev/docs/installation) v3. `task build` writes the native helper to `dist/`; `task package` builds three archives and `SHA256SUMS`. Override the output directory with `OUT_DIR=...`; set `SPU_PACKAGE_TARGETS=darwin/arm64` to package one target. To install a local Apple Silicon build, run `bash scripts/install.sh --archive dist/spu-v0.0.0-darwin-arm64.tar.gz` after packaging. `task smoke` builds and installs the native archive in an isolated temporary home.
 
 CI runs macOS arm64 smoke tests on macOS 15, Ubuntu x64 tests on 24.04 LTS, and Windows x64 tests on Windows Server 2025. GitHub does not provide hosted Windows 10/11 x64 runners, so desktop Windows compatibility needs separate manual verification. The formatter covers Bash and Go and requires shfmt; linting also requires ShellCheck. Windows commands run in Git Bash.
 

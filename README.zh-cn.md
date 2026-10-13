@@ -8,7 +8,7 @@
 
 </div>
 
-`spu` 用一条命令收纳常用的开发工具。启动器基于 Bash 3.2；许可证、欢迎横幅和 Git 全局配置由 Go 程序处理。发布包面向 Apple 芯片 Mac、x64 的 Ubuntu 24.04 LTS，以及使用 Git Bash 的 x64 Windows 10/11。未来的发布版二进制无需安装 Go。
+`spu` 用一条命令收纳常用的开发工具。启动器基于 Bash 3.2；许可证、欢迎横幅和 Git 全局配置由 Go 程序处理。发布包面向 Apple 芯片 Mac、x64 的 Ubuntu 24.04 LTS，以及使用 Git Bash 的 x64 Windows 10/11。发布版二进制无需安装 Go。
 
 ## 命令
 
@@ -20,32 +20,16 @@
 | `spu git` | 通过单个 `include.path` 管理 Git 全局默认配置 |
 | `spu update` | 更新已安装的发布版并报告配置版本差异 |
 
-## 试用当前源码
+## 安装
 
-[目前公开的最新版本](https://github.com/soppylzz/soppy-utils/releases)仍是旧版 Zsh 实现，尚未包含 Bash + Go 预编译包。现在要使用本文介绍的命令，需要 Go 1.24.2 或更新版本，从当前源码运行：
-
-```sh
-git clone https://github.com/soppylzz/soppy-utils.git
-cd soppy-utils
-bash bin/spu license --mit --name 'Ada Lovelace' --year 2026
-```
-
-如需安装本地构建，先安装 [go-task](https://taskfile.dev/docs/installation)，运行 `task package VERSION=v0.0.0`，再选择与系统及架构匹配的压缩包：
-
-```sh
-bash scripts/install.sh --archive dist/spu-v0.0.0-darwin-arm64.tar.gz
-```
-
-示例压缩包适用于 Apple 芯片 Mac。x64 的 Ubuntu 24.04 LTS 使用 `linux-amd64`，x64 的 Windows 10/11 使用 `windows-amd64`。安装器会用 `dist/SHA256SUMS` 校验压缩包，然后将 `spu` 放到 `~/.local/bin`；如有需要，请将该目录加入 `PATH`。源码目录不会被删除。
-
-首个 Bash + Go 发布版提供压缩包和 `SHA256SUMS` 后，新用户可下载并运行[安装器](scripts/install.sh)，无需安装 Go：
+[最新发布版](https://github.com/soppylzz/soppy-utils/releases/latest)已提供预编译程序。在支持的平台下载并运行[安装器](scripts/install.sh)；Windows 请使用 Git Bash：
 
 ```sh
 curl -fsSLo install-spu.sh https://raw.githubusercontent.com/soppylzz/soppy-utils/main/scripts/install.sh
 bash install-spu.sh
 ```
 
-已安装发布版的用户可运行 `spu update`。旧版 Zsh 安装没有这个命令；新版本发布后，可以先用安装器的 `--upgrade` 参数升级一次。
+安装器会选择对应平台的压缩包，用 `SHA256SUMS` 校验后将 `spu` 放到 `~/.local/bin`；如有需要，请将该目录加入 `PATH`。从旧版 v0.1.0 Zsh 安装升级时，运行 `bash install-spu.sh --upgrade`。安装后可使用 `spu update` 获取后续版本。
 
 ## 使用
 
@@ -81,6 +65,14 @@ bash ~/.local/share/soppy-utils/scripts/uninstall.sh --purge
 
 ## 开发
 
+使用 Go 1.24.2 或更新版本从源码运行：
+
+```sh
+git clone https://github.com/soppylzz/soppy-utils.git
+cd soppy-utils
+bash bin/spu license --mit --name 'Ada Lovelace' --year 2026
+```
+
 ```sh
 task format
 task format:check
@@ -91,7 +83,7 @@ task smoke
 task hooks:install
 ```
 
-开发需要 Go 1.24.2 或更新版本，以及 go-task v3。`task build` 将当前平台的 Go 程序写入 `dist/`；`task package` 生成三个平台的压缩包及 `SHA256SUMS`。可用 `OUT_DIR=...` 指定输出目录，也可设置 `SPU_PACKAGE_TARGETS=darwin/arm64` 只打包一个目标。`task smoke` 会在隔离的临时 HOME 下构建、安装并运行当前平台的压缩包。
+开发还需要 [go-task](https://taskfile.dev/docs/installation) v3。`task build` 将当前平台的 Go 程序写入 `dist/`；`task package` 生成三个平台的压缩包及 `SHA256SUMS`。可用 `OUT_DIR=...` 指定输出目录，也可设置 `SPU_PACKAGE_TARGETS=darwin/arm64` 只打包一个目标。打包后可运行 `bash scripts/install.sh --archive dist/spu-v0.0.0-darwin-arm64.tar.gz` 安装 Apple 芯片 Mac 的本地构建。`task smoke` 会在隔离的临时 HOME 下构建、安装并运行当前平台的压缩包。
 
 CI 在 macOS 15 上测试 macOS arm64，在 Ubuntu 24.04 LTS 上测试 Linux x64，在 Windows Server 2025 上测试 Windows x64。GitHub 没有托管的 Windows 10/11 x64 runner，因此桌面版 Windows 的兼容性还需要单独手动验证。格式化命令处理 Bash 和 Go 文件，需要 shfmt；lint 还需要 ShellCheck。Windows 命令在 Git Bash 中运行。
 
