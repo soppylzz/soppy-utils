@@ -23,9 +23,10 @@ git -C "$repo" config commit.gpgsign false
 
 describe 'local Git hook configuration'
 git -C "$repo" config --local core.hooksPath "$temp/other-hooks"
+original_hooks_path="$(git -C "$repo" config --local --get core.hooksPath)"
 bash "$repo/scripts/dev/hooks.sh" install >/dev/null 2>&1
 toBe 'existing hook path is preserved' "$?" 1
-toBe 'existing path is unchanged' "$(git -C "$repo" config --local --get core.hooksPath)" "$temp/other-hooks"
+toBe 'existing path is unchanged' "$(git -C "$repo" config --local --get core.hooksPath)" "$original_hooks_path"
 git -C "$repo" config --local --unset core.hooksPath
 
 git -C "$repo" config --local core.hooksPath ''
