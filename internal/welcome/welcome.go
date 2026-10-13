@@ -25,7 +25,7 @@ var assets embed.FS
 
 const start = "# >>> soppy-utils welcome >>>"
 const end = "# <<< soppy-utils welcome <<<"
-const templateRevision = 4
+const templateRevision = 5
 const hook = start + "\ncase $- in\n  *i*)\n    if [ -r \"$HOME/.config/soppy-utils/welcome/welcome.sh\" ]; then\n      SPU_WELCOME_INTERACTIVE=1 bash \"$HOME/.config/soppy-utils/welcome/welcome.sh\"\n    fi\n    ;;\nesac\n" + end + "\n"
 const legacyHook = start + "\ncase $- in\n  *i*)\n    if [ -r \"$HOME/.config/soppy-utils/welcome.sh\" ]; then\n      . \"$HOME/.config/soppy-utils/welcome.sh\"\n    fi\n    ;;\nesac\n" + end + "\n"
 
@@ -68,11 +68,11 @@ func Render(data map[string]any) ([]byte, error) {
 		return nil, err
 	}
 	var out bytes.Buffer
-	// Powerlevel10k can redirect stdout while an interactive shell loads its rc file.
+	// Powerlevel10k can redirect all standard streams while an interactive shell loads its rc file.
 	out.WriteString(`#!/usr/bin/env bash
 # Managed by soppy-utils: welcome
 if [[ ${SPU_WELCOME_INTERACTIVE:-} != 1 ]]; then exit 0; fi
-if [[ ! -t 0 && ! -t 1 && ! -t 2 ]]; then exit 0; fi
+if [[ ! -t 0 && ! -t 1 && ! -t 2 ]] && ! (: </dev/tty) 2>/dev/null; then exit 0; fi
 `)
 	for _, key := range []string{"name", "device", "message"} {
 		v, ok := data[key].(string)
@@ -102,6 +102,33 @@ func checkMarkers(b []byte) (bool, error) {
 	return true, nil
 }
 
+func p10kPreambleStart(b []byte) int {
+	text := string(b)
+	offset := 0
+	for _, line := range strings.SplitAfter(text, "\n") {
+		if strings.HasPrefix(line, "if [[ -r ") && strings.Contains(line, "p10k-instant-prompt-") {
+			header := strings.LastIndex(text[:offset], "# Enable Powerlevel10k instant prompt.")
+			if header >= 0 {
+				comments := text[header:offset]
+				valid := true
+				for _, comment := range strings.Split(comments, "\n") {
+					trimmed := strings.TrimSpace(comment)
+					if trimmed != "" && !strings.HasPrefix(trimmed, "#") {
+						valid = false
+						break
+					}
+				}
+				if valid {
+					return strings.LastIndex(text[:header], "\n") + 1
+				}
+			}
+			return offset
+		}
+		offset += len(line)
+	}
+	return -1
+}
+
 func editHook(path string, want bool) error {
 	b, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
@@ -116,14 +143,19 @@ func editHook(path string, want bool) error {
 	if has && !strings.Contains(string(b), hook) && !strings.Contains(string(b), legacyHook) {
 		return fmt.Errorf("%s: managed hook was modified", path)
 	}
-	if want && has {
-		if strings.Contains(string(b), hook) {
+	if want && has && strings.Contains(string(b), hook) {
+		if filepath.Base(path) != ".zshrc" {
+			return nil
+		}
+		position := p10kPreambleStart(b)
+		if position < 0 || strings.Index(string(b), hook) < position {
 			return nil
 		}
 	}
 	if !want && !has {
 		return nil
 	}
+	original := append([]byte(nil), b...)
 	if has {
 		from := strings.Index(string(b), start)
 		to := strings.Index(string(b), end) + len(end)
@@ -133,10 +165,21 @@ func editHook(path string, want bool) error {
 		b = append(append([]byte{}, b[:from]...), b[to:]...)
 	}
 	if want {
-		if len(b) > 0 && b[len(b)-1] != '\n' {
-			b = append(b, '\n')
+		position := -1
+		if filepath.Base(path) == ".zshrc" {
+			position = p10kPreambleStart(b)
 		}
-		b = append(b, []byte(hook)...)
+		if position >= 0 {
+			b = append(append(append([]byte{}, b[:position]...), []byte(hook+"\n")...), b[position:]...)
+		} else {
+			if len(b) > 0 && b[len(b)-1] != '\n' {
+				b = append(b, '\n')
+			}
+			b = append(b, []byte(hook)...)
+		}
+	}
+	if bytes.Equal(original, b) {
+		return nil
 	}
 	return configstore.AtomicWrite(path, b, 0600)
 }

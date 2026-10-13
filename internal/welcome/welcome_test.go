@@ -1,11 +1,14 @@
 package welcome
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestRenderQuotesInputAndStaysSilentWithoutTTY(t *testing.T) {
@@ -54,6 +57,51 @@ func TestRenderQuotesInputAndStaysSilentWithoutTTY(t *testing.T) {
 	}
 }
 
+func TestRenderWithRedirectedStreamsAndControllingTTY(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("script does not provide a Unix controlling terminal on Windows")
+	}
+	if _, err := exec.LookPath("script"); err != nil {
+		t.Skip("script is unavailable")
+	}
+	dir := t.TempDir()
+	banner, err := Render(map[string]any{"name": "Alice", "device": "Mac", "message": "Ready"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "welcome.sh")
+	if err := os.WriteFile(path, banner, 0700); err != nil {
+		t.Fatal(err)
+	}
+	runner := filepath.Join(dir, "runner.sh")
+	if err := os.WriteFile(runner, []byte(`#!/usr/bin/env bash
+exec 3>&1
+exec </dev/null >"$SPU_TEST_CAPTURE" 2>&1
+SPU_WELCOME_INTERACTIVE=1 bash "$SPU_TEST_SCRIPT"
+exec 1>&3 2>&3
+cat "$SPU_TEST_CAPTURE"
+`), 0700); err != nil {
+		t.Fatal(err)
+	}
+	var args []string
+	if runtime.GOOS == "darwin" {
+		args = []string{"-q", "/dev/null", "bash", runner}
+	} else {
+		args = []string{"-q", "-c", "bash " + ShellQuote(runner), "/dev/null"}
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "script", args...)
+	cmd.Env = append(os.Environ(), "SPU_TEST_SCRIPT="+path, "SPU_TEST_CAPTURE="+filepath.Join(dir, "captured"), "HOME="+dir)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("redirected terminal run failed: %v, output: %.160q", err, out)
+	}
+	if !strings.Contains(string(out), "Alice") || !strings.Contains(string(out), "Ready") {
+		t.Fatalf("banner was hidden while standard streams were redirected: %.160q", out)
+	}
+}
+
 func TestMalformedHooksPreserved(t *testing.T) {
 	path := filepath.Join(t.TempDir(), ".bashrc")
 	original := []byte(start + "\n" + start + "\n" + end + "\n")
@@ -66,6 +114,41 @@ func TestMalformedHooksPreserved(t *testing.T) {
 	after, _ := os.ReadFile(path)
 	if string(after) != string(original) {
 		t.Fatal("modified malformed hook")
+	}
+}
+
+func TestWelcomeHookMovesBeforePowerlevel10k(t *testing.T) {
+	path := filepath.Join(t.TempDir(), ".zshrc")
+	preamble := `# Enable Powerlevel10k instant prompt. Should stay close to the top of ~/.zshrc.
+# Initialization code that may require console input must go above this block.
+if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]; then
+  source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
+fi
+`
+	original := "export PATH=\"$HOME/bin:$PATH\"\n\n" + preamble + "\nexport EDITOR=vim\n" + hook
+	if err := os.WriteFile(path, []byte(original), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := editHook(path, true); err != nil {
+		t.Fatal(err)
+	}
+	updated, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	contents := string(updated)
+	if strings.Count(contents, start) != 1 || strings.Index(contents, hook) > strings.Index(contents, preamble) {
+		t.Fatal("welcome hook was not moved before the instant prompt")
+	}
+	if !strings.Contains(contents, "export EDITOR=vim\n") {
+		t.Fatal("unmanaged zshrc content was removed")
+	}
+	if err := editHook(path, true); err != nil {
+		t.Fatal(err)
+	}
+	again, err := os.ReadFile(path)
+	if err != nil || string(again) != contents {
+		t.Fatal("reinstall changed the already placed hook")
 	}
 }
 
