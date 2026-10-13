@@ -8,7 +8,7 @@
 
 </div>
 
-`spu` 用一条命令收纳常用的开发工具。启动器基于 Bash 3.2；许可证、欢迎横幅和 Git 全局配置由 Go 程序处理。发布流程面向 macOS、Linux 的 amd64/arm64，以及 Windows Git Bash 的 amd64/arm64。未来的发布版二进制无需安装 Go。
+`spu` 用一条命令收纳常用的开发工具。启动器基于 Bash 3.2；许可证、欢迎横幅和 Git 全局配置由 Go 程序处理。发布包面向 Apple 芯片 Mac、x64 的 Ubuntu 24.04 LTS，以及使用 Git Bash 的 x64 Windows 10/11。未来的发布版二进制无需安装 Go。
 
 ## 命令
 
@@ -30,13 +30,13 @@ cd soppy-utils
 bash bin/spu license --mit --name 'Ada Lovelace' --year 2026
 ```
 
-如需安装本地构建，先运行 `bash scripts/package.sh v0.0.0 dist`，再选择与系统及架构匹配的压缩包：
+如需安装本地构建，先安装 [go-task](https://taskfile.dev/docs/installation)，运行 `task package VERSION=v0.0.0`，再选择与系统及架构匹配的压缩包：
 
 ```sh
 bash scripts/install.sh --archive dist/spu-v0.0.0-darwin-arm64.tar.gz
 ```
 
-示例压缩包适用于 Apple 芯片 Mac。其他平台请替换为 `darwin-amd64`、`linux-amd64`、`linux-arm64`、`windows-amd64` 或 `windows-arm64`。安装器会用 `dist/SHA256SUMS` 校验压缩包，然后将 `spu` 放到 `~/.local/bin`；如有需要，请将该目录加入 `PATH`。源码目录不会被删除。
+示例压缩包适用于 Apple 芯片 Mac。x64 的 Ubuntu 24.04 LTS 使用 `linux-amd64`，x64 的 Windows 10/11 使用 `windows-amd64`。安装器会用 `dist/SHA256SUMS` 校验压缩包，然后将 `spu` 放到 `~/.local/bin`；如有需要，请将该目录加入 `PATH`。源码目录不会被删除。
 
 首个 Bash + Go 发布版提供压缩包和 `SHA256SUMS` 后，新用户可下载并运行[安装器](scripts/install.sh)，无需安装 Go：
 
@@ -82,11 +82,22 @@ bash ~/.local/share/soppy-utils/scripts/uninstall.sh --purge
 ## 开发
 
 ```sh
-bash scripts/test.sh
-bash scripts/lint.sh
+task format
+task format:check
+task check
+task build
+task package VERSION=v0.0.0
+task smoke
+task hooks:install
 ```
 
-开发需要 Go 1.24.2 或更新版本；lint 还需要 ShellCheck 和 shfmt。Windows 命令在 Git Bash 中运行。
+开发需要 Go 1.24.2 或更新版本，以及 go-task v3。`task build` 将当前平台的 Go 程序写入 `dist/`；`task package` 生成三个平台的压缩包及 `SHA256SUMS`。可用 `OUT_DIR=...` 指定输出目录，也可设置 `SPU_PACKAGE_TARGETS=darwin/arm64` 只打包一个目标。`task smoke` 会在隔离的临时 HOME 下构建、安装并运行当前平台的压缩包。
+
+CI 在 macOS 15 上测试 macOS arm64，在 Ubuntu 24.04 LTS 上测试 Linux x64，在 Windows Server 2025 上测试 Windows x64。GitHub 没有托管的 Windows 10/11 x64 runner，因此桌面版 Windows 的兼容性还需要单独手动验证。格式化命令处理 Bash 和 Go 文件，需要 shfmt；lint 还需要 ShellCheck。Windows 命令在 Git Bash 中运行。
+
+`gofmt` 随 Go 工具链提供，`shfmt` 需要单独安装（通常位于 `$(go env GOPATH)/bin`）。两者只需都在 `PATH` 中即可。
+
+可选的 pre-commit hook 会对暂存区快照执行与 CI 相同的格式和 lint 检查，不会修改文件或自动暂存。提交前运行 `task format` 并暂存结果。`task hooks:uninstall` 会移除本仓库的 hook 设置；安装命令不会覆盖已有的 Git hooks。CI 检查每次 push 和 pull request，发布流程也会在打标签前重复质量检查。底层 `scripts/dev/` 命令仍供 hook 和直接调用使用。发布压缩包只包含 `scripts/` 下的安装、更新和卸载脚本。
 
 ## 许可证
 

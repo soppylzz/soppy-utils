@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -u
 
-root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 failed=0
 
 for spec in "$root"/test/*.spec.sh; do

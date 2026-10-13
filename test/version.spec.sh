@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 source "$(dirname "${BASH_SOURCE[0]}")/general/helpers.sh"
-source "$(dirname "${BASH_SOURCE[0]}")/../scripts/version.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/../scripts/dev/version.sh"
 
 describe 'version arithmetic and commit messages'
 toBe 'major resets' "$(bump_version 1.2.3 major)" '2.0.0'

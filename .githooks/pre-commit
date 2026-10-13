@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="$(git rev-parse --show-toplevel)"
+snapshot="$(mktemp -d)"
+trap 'rm -r -- "$snapshot"' EXIT
+
+git -C "$root" checkout-index --all --prefix="$snapshot/"
+if ! bash "$snapshot/scripts/dev/lint.sh"; then
+  echo 'pre-commit: checks failed in the staged files' >&2
+  exit 1
+fi

@@ -74,6 +74,14 @@ arm64 | ARM64 | aarch64) arch=arm64 ;;
   ;;
 esac
 
+case "$platform/$arch" in
+darwin/arm64 | linux/amd64 | windows/amd64) ;;
+*)
+  printf 'install: no release package for %s/%s\n' "$platform" "$arch" >&2
+  exit 1
+  ;;
+esac
+
 tmp="$(mktemp -d)"
 mkdir -p "$(dirname "$target")"
 lock="$(dirname "$target")/.soppy-utils-install.lock"

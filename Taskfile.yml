@@ -1,0 +1,79 @@
+version: '3'
+
+vars:
+  VERSION: dev
+  OUT_DIR: dist
+  BUMP: auto
+
+tasks:
+  format:
+    desc: Format Bash and Go sources.
+    cmds:
+      - bash scripts/dev/format.sh --write
+
+  format:check:
+    desc: Check Bash and Go formatting without changing files.
+    cmds:
+      - bash scripts/dev/format.sh --check
+
+  lint:
+    desc: Check formatting, Bash syntax, ShellCheck, and go vet.
+    cmds:
+      - bash scripts/dev/lint.sh
+
+  test:
+    desc: Run Bash specs and Go tests.
+    cmds:
+      - bash scripts/dev/test.sh
+
+  check:
+    desc: Run lint and tests.
+    cmds:
+      - task: lint
+      - task: test
+
+  build:
+    desc: Build the helper for the current platform (VERSION=dev OUT_DIR=dist).
+    env:
+      SPU_BUILD_VERSION: '{{.VERSION}}'
+      SPU_BUILD_OUT_DIR: '{{.OUT_DIR}}'
+    cmds:
+      - mkdir -p "$SPU_BUILD_OUT_DIR"
+      - go build -ldflags "-X main.version=$SPU_BUILD_VERSION" -o "$SPU_BUILD_OUT_DIR/spu-helper$(go env GOEXE)" ./cmd/spu-helper
+
+  package:
+    desc: Build release archives and checksums (VERSION=dev OUT_DIR=dist).
+    env:
+      SPU_BUILD_VERSION: '{{.VERSION}}'
+      SPU_BUILD_OUT_DIR: '{{.OUT_DIR}}'
+    cmds:
+      - bash scripts/dev/package.sh "$SPU_BUILD_VERSION" "$SPU_BUILD_OUT_DIR"
+
+  smoke:
+    desc: Build, install, and exercise an archive for the native target.
+    cmds:
+      - bash scripts/dev/smoke.sh
+
+  version:suggest:
+    desc: Suggest the next version from Conventional Commits.
+    silent: true
+    cmds:
+      - bash scripts/dev/version.sh suggest
+
+  version:resolve:
+    desc: Resolve the next version (BUMP=auto|major|minor|patch).
+    silent: true
+    env:
+      SPU_VERSION_BUMP: '{{.BUMP}}'
+    cmds:
+      - bash scripts/dev/version.sh resolve "$SPU_VERSION_BUMP"
+
+  hooks:install:
+    desc: Enable the optional pre-commit hook in this checkout.
+    cmds:
+      - bash scripts/dev/hooks.sh install
+
+  hooks:uninstall:
+    desc: Disable the optional pre-commit hook in this checkout.
+    cmds:
+      - bash scripts/dev/hooks.sh uninstall

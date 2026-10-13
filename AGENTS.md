@@ -6,7 +6,7 @@ Read the current code and tests before changing behavior. Files in `plan/` recor
 
 ## Overview
 
-`soppy-utils` exposes one `spu <util> [...args]` command. The public launcher, installer, updater, and VS Code integration use Bash 3.2. The `license`, `welcome`, and `git` utils use a precompiled Go helper; end users do not need Go. Supported release targets are macOS and Linux on amd64/arm64, plus Windows Git Bash on amd64/arm64.
+`soppy-utils` exposes one `spu <util> [...args]` command. The public launcher, installer, updater, and VS Code integration use Bash 3.2. The `license`, `welcome`, and `git` utils use a precompiled Go helper; end users do not need Go. Release packages target Apple Silicon Macs, Ubuntu 24.04 LTS on amd64, and Windows 10/11 Git Bash on amd64.
 
 ## Language and format
 
@@ -21,7 +21,10 @@ Write code comments, commit messages, requirement documents, and the English REA
 - `internal/configstore`: per-util `VERSION`, JSON config, schema validation, and in-memory defaults.
 - `internal/{license,welcome,gitconfig}`: util-specific CLI, forms, templates, rendering, and ownership rules.
 - `internal/ui`: terminal checks and Huh form setup.
-- `scripts/`: installation, update, release packaging, lint, test, and version helpers.
+- `Taskfile.yml`: go-task entry point for development, build, and CI commands.
+- `.githooks/pre-commit`: optional staged-snapshot quality gate.
+- `scripts/`: installation, update, and uninstall scripts shipped in release archives.
+- `scripts/dev/`: development, hook setup, test, version, and release packaging scripts excluded from release archives.
 - `test/`: Bash `*.spec.sh` files and shared assertions in `test/general/`.
 - `plan/`: requirement documents.
 
@@ -43,9 +46,9 @@ For Go changes, keep file operations and migrations in the owning package or sha
 
 ## Lint and tests
 
-Run `bash scripts/test.sh` and `bash scripts/lint.sh`. Lint requires ShellCheck, shfmt, Go, and gofmt. Bash specs use `test/general/helpers.sh`; Go packages use `go test ./...`. Do not introduce Node.js, npm, zunit, or another shell test runner. Keep tooling and runner scripts under `scripts/`, never `bin/`. Test generated scripts in noninteractive shells and keep real user home and global Git config untouched by tests.
+Use go-task v3 as the development and CI entry point: run `task format`, `task lint`, `task test`, and `task smoke`. `task check` runs lint and tests; `task build` writes a native helper to `dist/`. The underlying `scripts/dev/` commands remain available for direct use and the staged-snapshot hook. Lint requires ShellCheck, shfmt, Go, and gofmt. The optional hook is installed with `task hooks:install` and checks the staged snapshot without modifying the index. Bash specs use `test/general/helpers.sh`; Go packages use `go test ./...`. Do not introduce Node.js, npm, zunit, or another shell test runner. Keep tooling and runner scripts under `scripts/dev/`, never `bin/`. Test generated scripts in noninteractive shells and keep real user home and global Git config untouched by tests.
 
-CI runs native tests and archive smoke tests on all six targets. `scripts/package.sh <version> <output-dir>` builds release archives and `SHA256SUMS`; CD validates them before tagging. `scripts/version.sh` uses Conventional Commits: breaking changes bump major, `feat` bumps minor, other conventional commits bump patch.
+CI runs native tests and archive smoke tests on three targets through Task: macOS 15 arm64, Ubuntu 24.04 amd64, and Windows Server 2025 amd64. Windows Server is only a CI proxy for the Windows 10/11 desktop release target. `task package VERSION=<version> OUT_DIR=<output-dir>` invokes `scripts/dev/package.sh` to build three release archives and `SHA256SUMS`; CD validates them before tagging. `scripts/dev/version.sh` uses Conventional Commits: breaking changes bump major, `feat` bumps minor, other conventional commits bump patch.
 
 Keep the English and Chinese README examples aligned with actual CLI behavior. Verify public release assets before documenting an installer command as usable; a source checkout or cross-build is not proof that a binary release has been published.
 

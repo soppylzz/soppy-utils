@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 version="${1:-dev}"
 out_dir="${2:-$repo_root/dist}"
 
@@ -10,7 +10,7 @@ work="$(mktemp -d)"
 trap 'rm -r -- "$work"' EXIT
 : >"$out_dir/SHA256SUMS"
 
-targets="${SPU_PACKAGE_TARGETS:-darwin/amd64 darwin/arm64 linux/amd64 linux/arm64 windows/amd64 windows/arm64}"
+targets="${SPU_PACKAGE_TARGETS:-darwin/arm64 linux/amd64 windows/amd64}"
 for target in $targets; do
   os="${target%/*}"
   arch="${target#*/}"

@@ -8,7 +8,7 @@
 
 </div>
 
-`spu` brings a few everyday development tools under one command. Its launcher runs on Bash 3.2; a Go helper handles licenses, welcome banners, and global Git settings. The release workflow targets macOS and Linux on amd64/arm64, plus Windows Git Bash on amd64/arm64. Release binaries will not require Go.
+`spu` brings a few everyday development tools under one command. Its launcher runs on Bash 3.2; a Go helper handles licenses, welcome banners, and global Git settings. Release packages target Apple Silicon Macs, Ubuntu 24.04 LTS on x64, and Windows 10/11 on x64 with Git Bash. Release binaries will not require Go.
 
 ## Commands
 
@@ -30,13 +30,13 @@ cd soppy-utils
 bash bin/spu license --mit --name 'Ada Lovelace' --year 2026
 ```
 
-To install a local build, run `bash scripts/package.sh v0.0.0 dist`, then choose the archive for your OS and architecture:
+To install a local build, install [go-task](https://taskfile.dev/docs/installation), run `task package VERSION=v0.0.0`, then choose the archive for your OS and architecture:
 
 ```sh
 bash scripts/install.sh --archive dist/spu-v0.0.0-darwin-arm64.tar.gz
 ```
 
-The example archive is for Apple Silicon. Replace `darwin-arm64` with `darwin-amd64`, `linux-amd64`, `linux-arm64`, `windows-amd64`, or `windows-arm64` as appropriate. The installer verifies the archive against `dist/SHA256SUMS` and puts `spu` in `~/.local/bin`; add that directory to `PATH` if needed. It leaves the source checkout alone.
+The example archive is for Apple Silicon. Use `linux-amd64` for Ubuntu 24.04 LTS on x64 or `windows-amd64` for Windows 10/11 on x64. The installer verifies the archive against `dist/SHA256SUMS` and puts `spu` in `~/.local/bin`; add that directory to `PATH` if needed. It leaves the source checkout alone.
 
 After the first Bash + Go release publishes the archives and `SHA256SUMS`, new users can download and run [the installer](scripts/install.sh) without Go:
 
@@ -82,11 +82,22 @@ The default uninstall removes the package and launcher but preserves preferences
 ## Develop
 
 ```sh
-bash scripts/test.sh
-bash scripts/lint.sh
+task format
+task format:check
+task check
+task build
+task package VERSION=v0.0.0
+task smoke
+task hooks:install
 ```
 
-Development requires Go 1.24.2 or newer. Lint also requires ShellCheck and shfmt. Windows commands run in Git Bash.
+Development requires Go 1.24.2 or newer and go-task v3. `task build` writes the native helper to `dist/`; `task package` builds three archives and `SHA256SUMS`. Override the output directory with `OUT_DIR=...`; set `SPU_PACKAGE_TARGETS=darwin/arm64` to package one target. `task smoke` builds and installs the native archive in an isolated temporary home.
+
+CI runs macOS arm64 smoke tests on macOS 15, Ubuntu x64 tests on 24.04 LTS, and Windows x64 tests on Windows Server 2025. GitHub does not provide hosted Windows 10/11 x64 runners, so desktop Windows compatibility needs separate manual verification. The formatter covers Bash and Go and requires shfmt; linting also requires ShellCheck. Windows commands run in Git Bash.
+
+`gofmt` ships with the Go toolchain, while `shfmt` is installed separately (usually in `$(go env GOPATH)/bin`). Both only need to be on `PATH`.
+
+The optional pre-commit hook checks the staged snapshot with the same format and lint gate as CI. It does not edit files or stage changes. Run `task format` and stage its changes before committing. `task hooks:uninstall` removes the repository-local hook setting; installation leaves existing Git hooks untouched. CI checks every push and pull request, and the release workflow repeats the quality gate before tagging. The underlying `scripts/dev/` commands remain available for the hook and direct use. Release archives contain only the installer, updater, and uninstaller from `scripts/`.
 
 ## License
 
