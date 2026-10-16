@@ -6,6 +6,10 @@ source "$spu_root/src/utils/style.sh"
 # spu_go runs the Go executable. It is both the client and, when a client cannot reach
 # one, the core it talks to: one binary, so the two can never be different builds.
 spu_go() {
+  # The binary finds the updater beside itself, which works for an installation. In a
+  # checkout it cannot: go run builds into a temporary directory. The launcher knows the
+  # root it was run from, so it says so.
+  export SPU_ROOT="$spu_root"
   local exe="$spu_root/libexec/spu"
   if [[ "${OSTYPE:-}" == msys* || "${OSTYPE:-}" == cygwin* ]]; then
     exe="$exe.exe"
@@ -30,10 +34,6 @@ spu() {
   # Help and version are the binary's: the list of utils lives in its registry, and a
   # copy of it here is a copy that can be wrong.
   '' | help | -h | --help | --version) spu_go "$@" ;;
-  update)
-    shift
-    bash "$spu_root/scripts/update.sh" "$@"
-    ;;
   # Everything else is the Go binary's to route. A list of utils here would be a second
   # list to keep in step with the registry, and it was already one: __core was unknown to
   # this dispatcher, so the scripts could not ask a running core to stop.

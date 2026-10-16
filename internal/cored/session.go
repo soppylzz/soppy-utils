@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
-	"strings"
 	"sync"
 
 	"github.com/soppylzz/soppy-utils/internal/action"
@@ -108,7 +107,14 @@ func (s *session) AskActions(ctx context.Context, req action.Request) (action.Ou
 	// told what is missing, and the session continues. Asking somebody to approve an
 	// empty list is not a question.
 	if len(req.Actions) == 0 || !s.capabilities.ActionExecution {
-		if err := s.Notify(missingNote(req)); err != nil {
+		note := req.Reason
+		if len(req.Actions) > 0 {
+			// Something could have been done and this client cannot do it, which is worth
+			// saying. When there was nothing to offer the reason stands alone: appending
+			// this would blame the client for a gap in what core knows how to install.
+			note += "; this client cannot install it"
+		}
+		if err := s.Notify(note); err != nil {
 			return action.Outcome{}, err
 		}
 		return action.Outcome{Declined: true}, nil
@@ -174,24 +180,6 @@ func (s *session) question(ctx context.Context, method string, params map[string
 		// to answer, and a handler left waiting here would hold its session open.
 		return nil, ctx.Err()
 	}
-}
-
-// missingNote is what a user sees when nothing can be installed for them.
-func missingNote(req action.Request) string {
-	what := req.Reason
-	if what == "" {
-		parts := make([]string, 0, len(req.Actions))
-		for _, a := range req.Actions {
-			switch {
-			case len(a.Argv) > 0:
-				parts = append(parts, strings.Join(a.Argv, " "))
-			case a.URL != "":
-				parts = append(parts, a.URL)
-			}
-		}
-		what = "this needs " + strings.Join(parts, ", ")
-	}
-	return what + "; this client cannot install it"
 }
 
 // deliver hands answers to the request that asked for them, reporting whether one was

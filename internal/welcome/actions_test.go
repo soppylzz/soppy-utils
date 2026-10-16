@@ -5,6 +5,7 @@ import (
 	"github.com/soppylzz/soppy-utils/internal/core/coretest"
 	"io"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
@@ -29,7 +30,7 @@ func TestADarwinMachineIsOfferedHomebrew(t *testing.T) {
 	d := allPresent()
 	d.figlet = false
 
-	req := dependencyActions("darwin", d)
+	req := dependencyActions("darwin", "/home/u", d)
 	got := strings.Join(argvOf(t, req), " ")
 	if got != "brew install figlet" {
 		t.Errorf("action = %q, want brew install figlet", got)
@@ -49,7 +50,7 @@ func TestBothPackagesAreInstalledInOneGo(t *testing.T) {
 	d := allPresent()
 	d.figlet, d.fastfetch = false, false
 
-	got := strings.Join(argvOf(t, dependencyActions("darwin", d)), " ")
+	got := strings.Join(argvOf(t, dependencyActions("darwin", "/home/u", d)), " ")
 	if got != "brew install figlet fastfetch" {
 		t.Errorf("action = %q, want one command for both", got)
 	}
@@ -59,7 +60,7 @@ func TestALinuxMachineIsOfferedAptWithElevation(t *testing.T) {
 	d := allPresent()
 	d.figlet = false
 
-	req := dependencyActions("linux", d)
+	req := dependencyActions("linux", "/home/u", d)
 	got := strings.Join(argvOf(t, req), " ")
 	if got != "apt-get install -y figlet" {
 		t.Errorf("action = %q, want apt-get", got)
@@ -80,7 +81,7 @@ func TestFastfetchIsNotOfferedOnLinux(t *testing.T) {
 	d := allPresent()
 	d.fastfetch = false
 
-	req := dependencyActions("linux", d)
+	req := dependencyActions("linux", "/home/u", d)
 	if len(req.Actions) != 0 {
 		t.Errorf("offered %v, want nothing: its availability there is unconfirmed", req.Actions)
 	}
@@ -91,7 +92,7 @@ func TestFastfetchIsNotOfferedOnLinux(t *testing.T) {
 }
 
 func TestNothingMissingIsNothingToDo(t *testing.T) {
-	if req := dependencyActions("darwin", allPresent()); len(req.Actions) != 0 || req.Reason != "" {
+	if req := dependencyActions("darwin", "/home/u", allPresent()); len(req.Actions) != 0 || req.Reason != "" {
 		t.Errorf("request = %+v, want nothing", req)
 	}
 }
@@ -100,7 +101,7 @@ func TestAnUnknownPlatformIsOfferedNothing(t *testing.T) {
 	d := allPresent()
 	d.figlet = false
 
-	req := dependencyActions("plan9", d)
+	req := dependencyActions("plan9", "/home/u", d)
 	if len(req.Actions) != 0 {
 		t.Errorf("offered %v on a platform with no known package manager", req.Actions)
 	}
@@ -112,12 +113,17 @@ func TestTheFontsAreNamedEvenThoughNothingInstallsThem(t *testing.T) {
 	d := allPresent()
 	d.slantFont = false
 
-	req := dependencyActions("darwin", d)
+	req := dependencyActions("darwin", "/home/u", d)
 	if len(req.Actions) != 0 {
 		t.Errorf("offered %v, but nothing installs the fonts", req.Actions)
 	}
-	if !strings.Contains(req.Reason, "font") {
-		t.Errorf("reason = %q, want the fonts named", req.Reason)
+	// Named, with where they go. Nothing offers to fetch them, so a reader told only that
+	// something is missing has nowhere to take it.
+	if !strings.Contains(req.Reason, speedFontFile) || !strings.Contains(req.Reason, slantFontFile) {
+		t.Errorf("reason = %q, want the missing files named", req.Reason)
+	}
+	if !strings.Contains(req.Reason, filepath.Join("/home/u", ".figlet", "fonts")) {
+		t.Errorf("reason = %q, want the directory they belong in", req.Reason)
 	}
 }
 

@@ -105,6 +105,9 @@ func run(args []string, version string) (int, error) {
 
 	case "config-status":
 		return 0, configStatus(home)
+
+	case "update":
+		return runUpdate(args[1:])
 	}
 
 	// Everything core knows about goes to core. Asking the same list the registry is

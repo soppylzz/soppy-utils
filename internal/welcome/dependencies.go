@@ -58,13 +58,17 @@ func (d optionalTools) printStatus(out io.Writer) {
 // an elevation prompt and no way to answer one. It states what is missing and what would
 // install it, and the client decides whether to. That is why no sudo appears here — how
 // to obtain privileges is not core's business.
-func dependencyActions(goos string, d optionalTools) action.Request {
+func dependencyActions(goos, home string, d optionalTools) action.Request {
 	// Everything missing, in the order a user would look for it.
+	//
+	// The fonts are named with where they go, because nothing offers to fetch them and a
+	// reader who is told only that something is missing has nowhere to take it.
 	var missing []string
 	if !d.figlet {
 		missing = append(missing, toolFiglet)
 	} else if !d.speedFont || !d.slantFont {
-		missing = append(missing, "its FIGlet fonts")
+		missing = append(missing, "the FIGlet fonts "+speedFontFile+" and "+slantFontFile+
+			", which belong in "+filepath.Join(home, ".figlet", "fonts")+" and which spu does not fetch")
 	}
 	if !d.fastfetch {
 		missing = append(missing, toolFastfetch)

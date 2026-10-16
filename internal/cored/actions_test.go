@@ -226,5 +226,11 @@ func TestAnEmptyOfferIsToldRatherThanAsked(t *testing.T) {
 	if !strings.Contains(string(note.Params), "font") {
 		t.Errorf("notify = %s, want what is missing named", note.Params)
 	}
+	// No blame, because there was nothing to offer: the client's ability is not the
+	// reason nothing happened, and saying so would send the reader looking in the wrong
+	// place.
+	if strings.Contains(string(note.Params), "cannot install") {
+		t.Errorf("notify = %s, want the reason alone", note.Params)
+	}
 	_ = id
 }

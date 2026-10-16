@@ -482,7 +482,7 @@ func Run(ctx context.Context, session core.Session, args []string, out io.Writer
 // dependency that cannot be installed leaves a util degraded, which is a legitimate
 // state rather than a failure.
 func offerDependencies(ctx context.Context, session core.Session, s configstore.Store, reply core.Responder) error {
-	req := dependencyActions(session.GOOS, detectOptionalTools(s.Home))
+	req := dependencyActions(session.GOOS, s.Home, detectOptionalTools(s.Home))
 	if req.Reason == "" {
 		return nil
 	}
