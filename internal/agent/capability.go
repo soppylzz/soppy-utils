@@ -16,7 +16,7 @@ func Register(r *registry.Registry) error {
 	return r.Register(registry.Capability{
 		ID:       "agent",
 		Title:    "Agent documents",
-		Usage:    "spu agent [--items list] [--harnesses list] [--answers path] [status|edit|migrate]",
+		Usage:    "spu agent [--items list] [--harnesses list] [--answers path] [status|edit|migrate|import|remove]",
 		Commands: commands,
 		Judge:    judge,
 	})
@@ -39,8 +39,8 @@ func commandSurface() ([]registry.Command, error) {
 
 	chooseFlags := []registry.Flag{
 		{Name: "--items", Arg: "list",
-			Summary: "Generate these items and nothing else, comma-separated. Available: " +
-				strings.Join(ids, ", ")},
+			Summary: "Generate these items and nothing else, comma-separated. spu ships: " +
+				strings.Join(ids, ", ") + ". Anything you have imported is available too."},
 		{Name: "--harnesses", Arg: "list", Options: harnessNames,
 			Summary: "Arrange the project for these harnesses, comma-separated"},
 		{Name: "--answers", Arg: "path",
@@ -60,6 +60,8 @@ func commandSurface() ([]registry.Command, error) {
 				{Name: "--interactive", Arg: "bool", Summary: "Ask anyway"},
 			}},
 		{Name: "migrate", Summary: "Record documents generated before spu kept a ledger"},
+		{Name: "import", Summary: "Add a template of your own, from a directory holding an item.json"},
+		{Name: "remove", Summary: "Take one of your own back out of the library"},
 	}, nil
 }
 

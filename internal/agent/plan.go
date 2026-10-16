@@ -10,7 +10,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
 
@@ -26,17 +25,15 @@ type PlanOptions struct {
 	// Project is the directory the project's files are generated into.
 	Project string
 
-	// Items are the items to consider, in the order they were chosen.
-	Items []item.Item
+	// Items are the items to consider, in the order they were chosen, each with the
+	// files its content reads.
+	Items []item.Source
 
 	// Answers is each item's answers, keyed by item id.
 	Answers map[string]map[string]any
 
 	// Ledger is what was recorded before this run.
 	Ledger ledger.Ledger
-
-	// Files is the embedded content the items name.
-	Files fs.FS
 }
 
 // Step is one output and what should happen to it.
@@ -65,11 +62,12 @@ type Step struct {
 // asked and the same answers given, and only the writing differs.
 func Plan(opts PlanOptions) ([]Step, error) {
 	var steps []Step
-	for _, it := range opts.Items {
+	for _, src := range opts.Items {
+		it := src.Item
 		answers := opts.Answers[it.ID]
 		recorded, _ := opts.Ledger.Find(it.ID)
 		for _, out := range it.Outputs {
-			body, err := render.Output(out, answers, opts.Files)
+			body, err := render.Output(out, answers, src.Files)
 			if err != nil {
 				return nil, fmt.Errorf("item %s: %w", it.ID, err)
 			}

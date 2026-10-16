@@ -73,6 +73,41 @@ spu agent --answers answers.json      # 选择与答案，供自动化使用
 spu agent edit --items conduct-of-go --answers answers.json
 ```
 
+### 你自己的约定
+
+`spu` 内置九份文档，但它不可能是所有人的。你自己的模版就是**一个目录**，里面放 `item.json` 和它引用的文件；导入后会进入与 spu 内置项并列的库：
+
+```sh
+spu agent import ./my-template     # 先校验，再复制进库
+spu agent remove my-conventions    # 取出来
+```
+
+之后它就像任何 item 一样被提供 —— 在选择器里，也能用 `--items`。库存放在 `~/.config/soppy-utils/agent/items/`，是**全局**而非按项目的：一个人持有的约定不会因为换了仓库就不成立。
+
+```jsonc
+// my-template/item.json
+{
+  "id": "api-conventions",          // 必须与目录名一致
+  "version": 1,                     // 文本变化时递增
+  "title": "Our HTTP API conventions",
+  "policy": "reuse",                // reuse | fresh | skip
+  "on_modified": "overwrite",       // overwrite | refuse | ask
+  "questions": {"type": "object", "properties": {
+    "versioning": {"type": "enum", "enum": ["path", "header"], "default": "path"}
+  }},
+  "outputs": [{
+    "root": "agents",               // agents | claude | codex | pi
+    "path": "prompts/api-conventions.md",
+    "content": [
+      {"file": "header.md"},                                  // 与 item.json 同目录
+      {"when": {"answer": "versioning", "is": "header"}, "file": "header-version.md"}
+    ]
+  }]
+}
+```
+
+无法解析的定义、目录名与 `id` 不符、以及与 spu 内置项重名，都会在复制任何东西之前被拒绝。
+
 `--answers` 读取一个包含整次运行的 JSON 对象：
 
 ```json

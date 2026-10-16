@@ -9,6 +9,7 @@ package item
 import (
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"regexp"
 	"strings"
 )
@@ -76,6 +77,16 @@ type Item struct {
 	// answered is the question keys and choices the schema declares, gathered while
 	// validating so that a `when` can be checked against what was actually asked.
 	answered map[string]map[string]bool
+}
+
+// Source is a definition and the files its content segments read.
+//
+// A definition and the text it names are one thing: an item shipped inside the binary
+// reads from the embedded documents, and one somebody wrote reads from beside its own
+// definition. Carry them together and nothing downstream has to know which it is.
+type Source struct {
+	Item  Item
+	Files fs.FS
 }
 
 // Output is one file an item writes.

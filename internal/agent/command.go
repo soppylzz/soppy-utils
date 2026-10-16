@@ -43,13 +43,17 @@ func (Handler) Run(ctx context.Context, cmd core.Command, reply core.Responder) 
 	}
 	switch sub {
 	case "":
-		return generate(ctx, project, rest, reply)
+		return generate(ctx, project, cmd.Session.Home, rest, reply)
 	case "status":
-		return status(project, rest, reply)
+		return status(project, cmd.Session.Home, rest, reply)
 	case "edit":
-		return edit(ctx, project, rest, reply)
+		return edit(ctx, project, cmd.Session.Home, rest, reply)
 	case "migrate":
-		return migrate(project, rest, reply)
+		return migrate(project, cmd.Session.Home, rest, reply)
+	case "import":
+		return importItem(cmd.Session.Home, rest, reply)
+	case "remove":
+		return removeItem(cmd.Session.Home, rest, reply)
 	default:
 		return fmt.Errorf("unknown agent command %q; run spu agent --help", sub)
 	}
@@ -73,12 +77,12 @@ func canonical(project string) string {
 	return harness.Dir(project, item.RootAgents)
 }
 
-func generate(ctx context.Context, project string, args []string, reply core.Responder) error {
+func generate(ctx context.Context, project, home string, args []string, reply core.Responder) error {
 	sel, err := parseSelection("agent", args)
 	if err != nil {
 		return err
 	}
-	items, err := content.Items()
+	items, err := content.Library(home)
 	if err != nil {
 		return err
 	}
@@ -115,7 +119,7 @@ func generate(ctx context.Context, project string, args []string, reply core.Res
 
 	steps, err := Plan(PlanOptions{
 		Project: project, Items: filter(items, chosen), Answers: answers,
-		Ledger: led, Files: content.Files(),
+		Ledger: led,
 	})
 	if err != nil {
 		return err
@@ -188,19 +192,19 @@ var harnessNames = []string{"claude", "codex", "pi"}
 // Two questions in one form, because they are answered together and a second form for one
 // more question is a second interruption. Multi-select rather than a yes for each: the
 // list is known, and answering it once beats answering it once per item.
-func choose(ctx context.Context, reply core.Responder, items []item.Item,
+func choose(ctx context.Context, reply core.Responder, items []item.Source,
 	led ledger.Ledger) ([]string, []string, error) {
 
 	options := make([]form.Option, 0, len(items))
 	preselected := make([]string, 0, len(items))
-	for _, it := range items {
-		label := it.Title
+	for _, src := range items {
+		label := src.Item.Title
 		if label == "" {
-			label = it.ID
+			label = src.Item.ID
 		}
-		options = append(options, form.Option{Value: it.ID, Label: label})
-		if _, ok := led.Find(it.ID); ok {
-			preselected = append(preselected, it.ID)
+		options = append(options, form.Option{Value: src.Item.ID, Label: label})
+		if _, ok := led.Find(src.Item.ID); ok {
+			preselected = append(preselected, src.Item.ID)
 		}
 	}
 
@@ -243,8 +247,8 @@ func choose(ctx context.Context, reply core.Responder, items []item.Item,
 	// In the picker's order, not the order the form returned, so the walk and the report
 	// read the way the list did.
 	order := make(map[string]int, len(items))
-	for i, it := range items {
-		order[it.ID] = i
+	for i, src := range items {
+		order[src.Item.ID] = i
 	}
 	sort.SliceStable(chosen, func(i, j int) bool { return order[chosen[i]] < order[chosen[j]] })
 	return chosen, keepKnown(harnesses), nil
@@ -274,12 +278,12 @@ func keepKnown(names []string) []string {
 //
 // When nobody is asked, what was decided is reported rather than decided quietly: a
 // generated document whose answers nobody chose should say so.
-func ask(ctx context.Context, reply core.Responder, items []item.Item, chosen []string,
+func ask(ctx context.Context, reply core.Responder, items []item.Source, chosen []string,
 	led ledger.Ledger, sel selection) (map[string]map[string]any, error) {
 
 	byID := make(map[string]item.Item, len(items))
-	for _, it := range items {
-		byID[it.ID] = it
+	for _, src := range items {
+		byID[src.Item.ID] = src.Item
 	}
 
 	out := map[string]map[string]any{}
@@ -376,7 +380,7 @@ func stringsOf(v any) []string {
 }
 
 // status reports what the ledger records against what is on disk. It writes nothing.
-func status(project string, args []string, reply core.Responder) error {
+func status(project, home string, args []string, reply core.Responder) error {
 	if err := acceptNoFlags("agent status", args); err != nil {
 		return err
 	}
@@ -391,13 +395,13 @@ func status(project string, args []string, reply core.Responder) error {
 		return reply.Finish(nil)
 	}
 
-	items, err := content.Items()
+	items, err := content.Library(home)
 	if err != nil {
 		return err
 	}
 	known := make(map[string]item.Item, len(items))
-	for _, it := range items {
-		known[it.ID] = it
+	for _, src := range items {
+		known[src.Item.ID] = src.Item
 	}
 
 	for _, recorded := range led.Items {
@@ -435,8 +439,12 @@ func status(project string, args []string, reply core.Responder) error {
 // It is explicit rather than folded into the ordinary run, because answering a question
 // again is a decision about an item, and the run that collects the whole selection is not
 // the place for a decision about one of them.
-func edit(ctx context.Context, project string, args []string, reply core.Responder) error {
+func edit(ctx context.Context, project, home string, args []string, reply core.Responder) error {
 	sel, err := parseSelection("agent edit", args)
+	if err != nil {
+		return err
+	}
+	items, err := content.Library(home)
 	if err != nil {
 		return err
 	}
@@ -453,10 +461,6 @@ func edit(ctx context.Context, project string, args []string, reply core.Respond
 	}
 	if len(led.Items) == 0 {
 		return errors.New("nothing has been generated yet; run spu agent first")
-	}
-	items, err := content.Items()
-	if err != nil {
-		return err
 	}
 	chosen := make([]string, 0, len(led.Items))
 	for _, it := range led.Items {
@@ -485,7 +489,7 @@ func edit(ctx context.Context, project string, args []string, reply core.Respond
 	// the others on the way past.
 	steps, err := Plan(PlanOptions{
 		Project: project, Items: filter(items, picked), Answers: answers,
-		Ledger: led, Files: content.Files(),
+		Ledger: led,
 	})
 	if err != nil {
 		return err
@@ -521,7 +525,7 @@ func edit(ctx context.Context, project string, args []string, reply core.Respond
 // It only ever records what it finds already matching what spu would write: a file that
 // differs is not evidence of anything, and claiming it would let the next run replace
 // something nobody agreed to.
-func migrate(project string, args []string, reply core.Responder) error {
+func migrate(project, home string, args []string, reply core.Responder) error {
 	if err := acceptNoFlags("agent migrate", args); err != nil {
 		return err
 	}
@@ -529,18 +533,18 @@ func migrate(project string, args []string, reply core.Responder) error {
 	if err != nil {
 		return err
 	}
-	items, err := content.Items()
+	items, err := content.Library(home)
 	if err != nil {
 		return err
 	}
 
 	adopted := 0
-	for _, it := range items {
-		if _, ok := led.Find(it.ID); ok {
+	for _, src := range items {
+		if _, ok := led.Find(src.Item.ID); ok {
 			continue
 		}
 		steps, err := Plan(PlanOptions{
-			Project: project, Items: []item.Item{it}, Files: content.Files(),
+			Project: project, Items: []item.Source{src},
 		})
 		if err != nil {
 			return err
@@ -557,10 +561,10 @@ func migrate(project string, args []string, reply core.Responder) error {
 			continue
 		}
 		led.Items = append(led.Items, ledger.Item{
-			ID: it.ID, ItemVersion: it.Version, Outputs: outputs,
+			ID: src.Item.ID, ItemVersion: src.Item.Version, Outputs: outputs,
 		})
 		adopted++
-		_ = reply.Notify("adopted " + it.ID)
+		_ = reply.Notify("adopted " + src.Item.ID)
 	}
 
 	if adopted == 0 {
@@ -575,15 +579,15 @@ func migrate(project string, args []string, reply core.Responder) error {
 	return reply.Finish(nil)
 }
 
-func filter(items []item.Item, keep []string) []item.Item {
+func filter(items []item.Source, keep []string) []item.Source {
 	want := make(map[string]bool, len(keep))
 	for _, id := range keep {
 		want[id] = true
 	}
-	out := make([]item.Item, 0, len(items))
-	for _, it := range items {
-		if want[it.ID] {
-			out = append(out, it)
+	out := make([]item.Source, 0, len(items))
+	for _, src := range items {
+		if want[src.Item.ID] {
+			out = append(out, src)
 		}
 	}
 	return out
@@ -606,4 +610,54 @@ func acceptNoFlags(name string, args []string) error {
 			strings.Join(fs.Args(), " "))
 	}
 	return nil
+}
+
+// importItem copies a template of somebody's own into the library.
+//
+// The definition is read before anything is copied, so a directory that is not an item is
+// refused rather than half-installed and discovered while generating.
+func importItem(home string, args []string, reply core.Responder) error {
+	fs := flag.NewFlagSet("agent import", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if fs.NArg() != 1 {
+		return errors.New("agent import needs one directory holding an item.json")
+	}
+	src, replaced, err := content.Store(home, fs.Arg(0))
+	if err != nil {
+		return err
+	}
+	what := "imported"
+	if replaced {
+		what = "replaced"
+	}
+	if err := reply.Notify(fmt.Sprintf("%s %s: %s", what, src.Item.ID, titleOf(src.Item))); err != nil {
+		return err
+	}
+	if err := reply.Notify("it is in " + filepath.Join(content.LibraryDir(home), src.Item.ID)); err != nil {
+		return err
+	}
+	return reply.Finish(nil)
+}
+
+// removeItem takes one back out. The documents it generated stay where they are and become
+// the project's, which is what happens to any item that stops being chosen.
+func removeItem(home string, args []string, reply core.Responder) error {
+	fs := flag.NewFlagSet("agent remove", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if fs.NArg() != 1 {
+		return errors.New("agent remove needs the id of an item of your own")
+	}
+	if err := content.Remove(home, fs.Arg(0)); err != nil {
+		return err
+	}
+	if err := reply.Notify("removed " + fs.Arg(0) + "; documents it generated stay where they are"); err != nil {
+		return err
+	}
+	return reply.Finish(nil)
 }

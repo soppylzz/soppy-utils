@@ -45,8 +45,7 @@ func TestPlanWritesWhatIsAbsent(t *testing.T) {
 
 	steps, err := Plan(PlanOptions{
 		Project: project,
-		Items:   []item.Item{simple(t, "reuse", "overwrite")},
-		Files:   files(),
+		Items:   []item.Source{{Item: simple(t, "reuse", "overwrite"), Files: files()}},
 	})
 	if err != nil {
 		t.Fatalf("Plan: %v", err)
@@ -80,8 +79,7 @@ func TestPlanRefusesAFileItDidNotWrite(t *testing.T) {
 
 	steps, err := Plan(PlanOptions{
 		Project: project,
-		Items:   []item.Item{simple(t, "reuse", "overwrite")},
-		Files:   files(),
+		Items:   []item.Source{{Item: simple(t, "reuse", "overwrite"), Files: files()}},
 	})
 	if err != nil {
 		t.Fatalf("Plan: %v", err)
@@ -107,8 +105,7 @@ func TestPlanLeavesAnUnchangedFileAlone(t *testing.T) {
 
 	steps, err := Plan(PlanOptions{
 		Project: project,
-		Items:   []item.Item{simple(t, "reuse", "overwrite")},
-		Files:   files(),
+		Items:   []item.Source{{Item: simple(t, "reuse", "overwrite"), Files: files()}},
 		Ledger: ledger.Ledger{Version: ledger.CurrentVersion, Items: []ledger.Item{{
 			ID: "one", ItemVersion: 1,
 			Outputs: []ledger.Output{{Path: "prompts/one.md", SHA256: sha256Of([]byte("# One\n"))}},
@@ -134,8 +131,7 @@ func TestPlanSeesAnEditedFile(t *testing.T) {
 
 	steps, err := Plan(PlanOptions{
 		Project: project,
-		Items:   []item.Item{simple(t, "reuse", "refuse")},
-		Files:   files(),
+		Items:   []item.Source{{Item: simple(t, "reuse", "refuse"), Files: files()}},
 		Ledger: ledger.Ledger{Version: ledger.CurrentVersion, Items: []ledger.Item{{
 			ID: "one", ItemVersion: 1,
 			Outputs: []ledger.Output{{Path: "prompts/one.md", SHA256: sha256Of([]byte("# One\n"))}},

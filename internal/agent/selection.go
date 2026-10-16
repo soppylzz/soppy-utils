@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sort"
 	"strings"
 
 	"github.com/soppylzz/soppy-utils/internal/agent/item"
@@ -124,15 +125,19 @@ func (s selection) hasAnswers(id string) bool {
 //
 // A typo in `--items` would otherwise generate nothing and say nothing, which reads as
 // success.
-func (s selection) checkNames(items []item.Item, harnesses []string) error {
+func (s selection) checkNames(items []item.Source, harnesses []string) error {
 	known := make(map[string]bool, len(items))
-	for _, it := range items {
-		known[it.ID] = true
+	names := make([]string, 0, len(items))
+	for _, src := range items {
+		known[src.Item.ID] = true
+		names = append(names, src.Item.ID)
 	}
+	sort.Strings(names)
 	for _, want := range s.items {
 		if !known[want] {
-			return fmt.Errorf("no item named %q; run spu agent --help for the list,\n"+
-				"or run spu agent with no arguments to choose from a menu", want)
+			// The list is named here rather than left to --help, because --help is
+			// written when the program starts and a library can change after that.
+			return fmt.Errorf("no item named %q. Available: %s", want, strings.Join(names, ", "))
 		}
 	}
 	for _, want := range s.harnesses {

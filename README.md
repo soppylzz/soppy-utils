@@ -73,6 +73,41 @@ spu agent --answers answers.json      # selection and answers, for automation
 spu agent edit --items conduct-of-go --answers answers.json
 ```
 
+### Conventions of your own
+
+Nine documents ship inside `spu`, which cannot be everybody's. A template of your own is a directory holding an `item.json` and the files it names, and importing it puts it in a library beside spu's:
+
+```sh
+spu agent import ./my-template     # validate, then copy into the library
+spu agent remove my-conventions    # take it back out
+```
+
+It is then offered like any other item, in the picker and to `--items`. The library lives at `~/.config/soppy-utils/agent/items/`, globally rather than per project: a convention somebody holds does not stop being true when they change repository.
+
+```jsonc
+// my-template/item.json
+{
+  "id": "api-conventions",          // must match the directory name
+  "version": 1,                     // raise it when the text changes
+  "title": "Our HTTP API conventions",
+  "policy": "reuse",                // reuse | fresh | skip
+  "on_modified": "overwrite",       // overwrite | refuse | ask
+  "questions": {"type": "object", "properties": {
+    "versioning": {"type": "enum", "enum": ["path", "header"], "default": "path"}
+  }},
+  "outputs": [{
+    "root": "agents",               // agents | claude | codex | pi
+    "path": "prompts/api-conventions.md",
+    "content": [
+      {"file": "header.md"},                                  // beside item.json
+      {"when": {"answer": "versioning", "is": "header"}, "file": "header-version.md"}
+    ]
+  }]
+}
+```
+
+A definition that does not parse, a directory whose name disagrees with its `id`, and a template taking the name of one spu ships are all refused before anything is copied.
+
 `--answers` reads one JSON object holding the whole run:
 
 ```json

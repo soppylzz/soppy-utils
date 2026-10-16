@@ -17,8 +17,7 @@ func plan(t *testing.T, project string, policy, onModified string, led ledger.Le
 	t.Helper()
 	steps, err := Plan(PlanOptions{
 		Project: project,
-		Items:   []item.Item{simple(t, policy, onModified)},
-		Files:   files(),
+		Items:   []item.Source{{Item: simple(t, policy, onModified), Files: files()}},
 		Ledger:  led,
 	})
 	if err != nil {

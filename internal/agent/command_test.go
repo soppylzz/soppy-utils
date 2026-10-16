@@ -711,3 +711,86 @@ func TestTheIndexListsDocumentsAndNotRecords(t *testing.T) {
 		}
 	}
 }
+
+func TestATemplateOfYourOwnCanBeImportedAndGenerated(t *testing.T) {
+	// The whole point: the conventions a person holds are theirs, and spu ships nine items
+	// that cannot be everybody's.
+	home := t.TempDir()
+	from := t.TempDir()
+	dir := filepath.Join(from, "api-conventions")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "item.json"), []byte(`{
+	  "id": "api-conventions", "version": 1, "title": "Ours", "policy": "reuse",
+	  "questions": {"type": "object", "properties": {
+	    "versioning": {"type": "enum", "enum": ["path", "header"], "default": "path"}}},
+	  "outputs": [{"root": "agents", "path": "prompts/api.md", "content": [
+	    {"file": "header.md"},
+	    {"when": {"answer": "versioning", "is": "header"}, "text": "In the header.\n"}]}]
+	}`), 0o644); err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "header.md"), []byte("# Ours\n"), 0o644); err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+
+	project := t.TempDir()
+	reply := &coretest.Recorder{}
+	if err := runIn(t, project, home, reply, "import", dir); err != nil {
+		t.Fatalf("import: %v", err)
+	}
+	if !strings.Contains(strings.Join(reply.Notices, " "), "api-conventions") {
+		t.Errorf("the import said nothing about what it imported: %v", reply.Notices)
+	}
+
+	// It is offered, and it generates from its own content rather than from spu's.
+	if err := runIn(t, project, home, &coretest.Recorder{},
+		"--items", "api-conventions"); err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+	body, err := os.ReadFile(filepath.Join(canonical(project), "prompts", "api.md"))
+	if err != nil {
+		t.Fatalf("the imported item generated nothing: %v", err)
+	}
+	if !strings.Contains(string(body), "# Ours") {
+		t.Errorf("the document does not hold the imported text:\n%s", body)
+	}
+	if strings.Contains(string(body), "In the header") {
+		t.Error("the segment gated on a different answer was written")
+	}
+
+	// And its answers work like any other item's.
+	answers := filepath.Join(t.TempDir(), "a.json")
+	if err := os.WriteFile(answers, []byte(`{"answers":{"api-conventions":{"versioning":"header"}}}`), 0o644); err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+	if err := runIn(t, project, home, &coretest.Recorder{},
+		"edit", "--items", "api-conventions", "--answers", answers); err != nil {
+		t.Fatalf("edit: %v", err)
+	}
+	body, err = os.ReadFile(filepath.Join(canonical(project), "prompts", "api.md"))
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if !strings.Contains(string(body), "In the header") {
+		t.Errorf("the imported item's answers were not applied:\n%s", body)
+	}
+
+	if err := runIn(t, project, home, &coretest.Recorder{}, "remove", "api-conventions"); err != nil {
+		t.Fatalf("remove: %v", err)
+	}
+	if err := runIn(t, project, home, &coretest.Recorder{}, "--items", "api-conventions"); err == nil {
+		t.Error("a removed item is still offered")
+	}
+}
+
+// runIn is run with a home of its own, so the library a test imports into is not the one
+// the person running the tests has.
+func runIn(t *testing.T, dir, home string, reply core.Responder, args ...string) error {
+	t.Helper()
+	return (Handler{}).Run(context.Background(), core.Command{
+		Util: "agent", Args: args,
+		Session: core.Session{Home: home, GOOS: "linux", WorkingDir: dir},
+	}, reply)
+}
