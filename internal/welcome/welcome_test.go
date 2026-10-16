@@ -2,6 +2,7 @@ package welcome
 
 import (
 	"context"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -177,7 +178,9 @@ func TestLegacyBannerMigration(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(home, ".bashrc"), []byte(legacyHook), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if err := Run(home, []string{"migrate", "--name", "Alice", "--device", "Mac", "--message", "Ready", "--rc", "bash"}); err != nil {
+	if err := Run(context.Background(), home,
+		[]string{"migrate", "--name", "Alice", "--device", "Mac", "--message", "Ready", "--rc", "bash"},
+		io.Discard, &recorder{}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(filepath.Join(base, "welcome.sh")); !os.IsNotExist(err) {

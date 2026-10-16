@@ -2,11 +2,12 @@ package welcome
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 
-	"github.com/soppylzz/soppy-utils/internal/clioutput"
+	"github.com/soppylzz/soppy-utils/internal/core"
 )
 
 type optionalTools struct {
@@ -36,27 +37,27 @@ func detectOptionalTools(home string) optionalTools {
 	}
 }
 
-func (d optionalTools) warnMissing() {
+func (d optionalTools) warnMissing(reply core.Responder) {
 	if !d.figlet {
-		clioutput.Warn("welcome", "optional figlet not found; banner text will be plain")
+		reply.Notify("welcome: optional figlet not found; banner text will be plain")
 	} else if !d.speedFont || !d.slantFont {
-		clioutput.Warn("welcome", "optional FIGlet fonts are missing; affected banner text will be plain")
+		reply.Notify("welcome: optional FIGlet fonts are missing; affected banner text will be plain")
 	}
 	if !d.fastfetch {
-		clioutput.Warn("welcome", "optional fastfetch not found; system summary will be skipped")
+		reply.Notify("welcome: optional fastfetch not found; system summary will be skipped")
 	}
 }
 
-func (d optionalTools) printStatus() {
+func (d optionalTools) printStatus(out io.Writer) {
 	if d.figlet {
-		fmt.Println("figlet: available")
-		fmt.Printf("figlet fonts: speed=%t smslant=%t\n", d.speedFont, d.slantFont)
+		fmt.Fprintln(out, "figlet: available")
+		fmt.Fprintf(out, "figlet fonts: speed=%t smslant=%t\n", d.speedFont, d.slantFont)
 	} else {
-		fmt.Println("figlet: missing (plain text fallback)")
+		fmt.Fprintln(out, "figlet: missing (plain text fallback)")
 	}
 	if d.fastfetch {
-		fmt.Println("fastfetch: available")
+		fmt.Fprintln(out, "fastfetch: available")
 	} else {
-		fmt.Println("fastfetch: missing (system summary skipped)")
+		fmt.Fprintln(out, "fastfetch: missing (system summary skipped)")
 	}
 }

@@ -6,6 +6,35 @@
     "schema_version",
     "data"
   ],
+  "x-spu-ui": {
+    "title": "Welcome banner",
+    "order": [
+      "name",
+      "device",
+      "message",
+      "rc"
+    ],
+    "fields": {
+      "name": {
+        "title": "Banner name"
+      },
+      "device": {
+        "title": "Device name"
+      },
+      "message": {
+        "title": "Message"
+      },
+      "rc": {
+        "title": "Startup hook",
+        "options": {
+          "none": "None",
+          "bash": "Bash",
+          "zsh": "Zsh",
+          "both": "Both"
+        }
+      }
+    }
+  },
   "properties": {
     "util": {
       "const": "welcome"
