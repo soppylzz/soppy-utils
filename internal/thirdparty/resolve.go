@@ -13,6 +13,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -96,12 +97,40 @@ type Resolver struct {
 // that is the whole purpose. A different major is fetched, because a v3 is not a newer v2
 // but a different library that happens to share a name.
 func (r Resolver) Resolve(ctx context.Context, req Request) (Result, error) {
-	dir, err := r.pathFor(req.Package)
+	// The shape is checked before anything is read or fetched: a version whose meaning is
+	// not one of the two this accepts would otherwise be matched by its major, which is a
+	// different question answered silently.
+	if err := CheckVersion(req.Version); err != nil {
+		return Result{}, err
+	}
+	base, err := r.pathFor(req.Package)
 	if err != nil {
 		return Result{}, err
 	}
 	url := CloneURL(req.Package)
 
+	// A package's checkouts are kept one per major, because a v3 is not a newer v2 but a
+	// different library that happens to share a name. One directory per package meant the
+	// second major could never be fetched, and asking for it reported the first as
+	// unrecorded.
+	if major := majorOf(req.Version); major != "" {
+		return r.settle(ctx, req, url, checkoutDir(base, major))
+	}
+	if dir, cached, ok := newestCheckout(base); ok {
+		// Nothing was asked for, so anything already checked out will do.
+		return Result{Path: dir, Version: cached.Version}, nil
+	}
+	// Nothing cached to take: find out what the newest release is, which also says which
+	// directory it belongs in.
+	ref, err := r.resolveRef(ctx, url, "")
+	if err != nil {
+		return Result{}, err
+	}
+	return r.settle(ctx, req, url, checkoutDir(base, majorOf(ref)))
+}
+
+// settle answers from one major's directory, fetching into it when it cannot.
+func (r Resolver) settle(ctx context.Context, req Request, url, dir string) (Result, error) {
 	cached, err := readProvenance(dir)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return Result{}, err
@@ -129,6 +158,9 @@ func (r Resolver) Resolve(ctx context.Context, req Request) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
+	if err := refuseOccupied(dir, ref); err != nil {
+		return Result{}, err
+	}
 
 	version, err := r.fetch(ctx, url, dir, ref)
 	if err != nil {
@@ -145,6 +177,60 @@ func (r Resolver) Resolve(ctx context.Context, req Request) (Result, error) {
 		return Result{}, fmt.Errorf("record what was checked out of %s: %w", req.Package, err)
 	}
 	return Result{Path: dir, Version: version, Fetched: true}, nil
+}
+
+// refuseOccupied reports a directory that already holds something this request cannot use.
+//
+// Said here rather than left to git, which refuses an empty-into-non-empty clone with a
+// message about the directory. What is in there, and what it was, is what the reader needs.
+func refuseOccupied(dir, ref string) error {
+	entries, err := os.ReadDir(dir)
+	if err != nil || len(entries) == 0 {
+		return nil
+	}
+	if cached, err := readProvenance(dir); err == nil && cached.Version != "" {
+		return fmt.Errorf("%s holds %s, and this request is for %s; remove it to fetch that "+
+			"version instead", dir, cached.Version, ref)
+	}
+	return fmt.Errorf("%s already has files in it and nothing recorded what they are; "+
+		"remove it and run again", dir)
+}
+
+// checkoutDir is where one major of one package is kept.
+func checkoutDir(base, major string) string {
+	return base + "@v" + major
+}
+
+// newestCheckout finds the newest major already checked out for a package.
+//
+// An unversioned request is the only caller: nothing was asked for, so whatever is there
+// answers it, and the newest is the least surprising choice when there are several.
+func newestCheckout(base string) (string, provenance, bool) {
+	entries, err := os.ReadDir(filepath.Dir(base))
+	if err != nil {
+		return "", provenance{}, false
+	}
+	prefix := filepath.Base(base) + "@v"
+
+	best, dir := -1, ""
+	for _, e := range entries {
+		if !e.IsDir() || !strings.HasPrefix(e.Name(), prefix) {
+			continue
+		}
+		n, err := strconv.Atoi(strings.TrimPrefix(e.Name(), prefix))
+		if err != nil || n <= best {
+			continue
+		}
+		best, dir = n, filepath.Join(filepath.Dir(base), e.Name())
+	}
+	if best < 0 {
+		return "", provenance{}, false
+	}
+	cached, err := readProvenance(dir)
+	if err != nil || cached.Version == "" {
+		return "", provenance{}, false
+	}
+	return dir, cached, true
 }
 
 // satisfies reports whether a checkout on disk answers the request.
@@ -190,7 +276,7 @@ func (r Resolver) fetch(ctx context.Context, url, dir, ref string) (string, erro
 	return fetch(ctx, url, dir, ref)
 }
 
-// pathFor maps a package to a directory under the cache.
+// pathFor maps a package to its place under the cache, one directory above its checkouts.
 //
 // The host is part of the path so that a package from one host cannot be served for a
 // request naming another, which is the difference between reading a library and reading

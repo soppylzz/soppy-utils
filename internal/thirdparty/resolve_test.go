@@ -3,6 +3,7 @@ package thirdparty
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -37,6 +38,13 @@ func (f *fakeRemote) clone(_ context.Context, url, dest, ref string) (string, er
 	}
 	f.calls = append(f.calls, ref)
 	f.urls = append(f.urls, url)
+	// git refuses to clone into a directory that is not empty, and the double has to
+	// refuse it too. A double that tidily overwrites whatever is there agreed with an
+	// implementation that told every second major it could not be fetched, and the tests
+	// said both were fine.
+	if entries, err := os.ReadDir(dest); err == nil && len(entries) > 0 {
+		return "", fmt.Errorf("destination path '%s' already exists and is not an empty directory", dest)
+	}
 	if err := os.MkdirAll(dest, 0o755); err != nil {
 		return "", err
 	}
@@ -77,8 +85,8 @@ func TestAFetchPopulatesTheCache(t *testing.T) {
 	if !got.Fetched {
 		t.Error("the first request did not fetch")
 	}
-	if got.Path != filepath.Join(cache, "github.com", "foo", "bar") {
-		t.Errorf("Path = %q, want it under the cache", got.Path)
+	if got.Path != filepath.Join(cache, "github.com", "foo", "bar")+"@v2" {
+		t.Errorf("Path = %q, want it under the cache, named for the major", got.Path)
 	}
 	if got.Version != "v2.3.1" {
 		t.Errorf("Version = %q, want what was checked out", got.Version)
@@ -197,24 +205,76 @@ func TestAnExistingCheckoutIsReusedWithoutFetching(t *testing.T) {
 	}
 }
 
-func TestADifferentMajorIsFetched(t *testing.T) {
+func TestDifferentMajorsAreKeptApart(t *testing.T) {
+	// A v1 is not a newer v2 but a different library that happens to share a name, so both
+	// have to be able to sit in the cache at once. One directory per package meant the
+	// second major could never be fetched at all.
+	f := remote(t)
+	r := resolver(t, t.TempDir(), f)
+
+	two, err := r.Resolve(context.Background(), Request{
+		Package: "github.com/foo/bar", Version: "2"})
+	if err != nil {
+		t.Fatalf("Resolve v2: %v", err)
+	}
+	if two.Version != "v2.9.0" {
+		t.Fatalf("Version = %q, want the newest of that major", two.Version)
+	}
+
+	one, err := r.Resolve(context.Background(), Request{
+		Package: "github.com/foo/bar", Version: "1"})
+	if err != nil {
+		t.Fatalf("Resolve v1: %v", err)
+	}
+	if !one.Fetched {
+		t.Error("a different major was served from the cache")
+	}
+	if one.Version != "v1.4.0" {
+		t.Errorf("Version = %q, want the newest of the major that was asked for", one.Version)
+	}
+	if one.Path == two.Path {
+		t.Error("both majors were put in one directory")
+	}
+
+	// And each is still answered from its own directory afterwards.
+	again, err := r.Resolve(context.Background(), Request{
+		Package: "github.com/foo/bar", Version: "2"})
+	if err != nil {
+		t.Fatalf("Resolve v2 again: %v", err)
+	}
+	if again.Fetched || again.Version != "v2.9.0" {
+		t.Errorf("v2 was not answered from the cache: %+v", again)
+	}
+	before := len(f.calls)
+	if _, err := r.Resolve(context.Background(), Request{
+		Package: "github.com/foo/bar", Version: "1"}); err != nil {
+		t.Fatalf("Resolve v1 again: %v", err)
+	}
+	if len(f.calls) != before {
+		t.Errorf("v1 was fetched again: %v", f.calls)
+	}
+}
+
+func TestAnUnversionedRequestTakesWhatIsAlreadyThere(t *testing.T) {
+	// Nothing asked for constrains nothing, so whatever is checked out answers it. There
+	// is no directory for "no version": the majors are the directories.
 	f := remote(t)
 	r := resolver(t, t.TempDir(), f)
 
 	if _, err := r.Resolve(context.Background(), Request{
 		Package: "github.com/foo/bar", Version: "2"}); err != nil {
-		t.Fatalf("Resolve: %v", err)
+		t.Fatalf("Resolve v2: %v", err)
 	}
-	got, err := r.Resolve(context.Background(), Request{
-		Package: "github.com/foo/bar", Version: "1"})
+	before := len(f.calls)
+	got, err := r.Resolve(context.Background(), Request{Package: "github.com/foo/bar"})
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
-	if !got.Fetched {
-		t.Error("a different major was served from the cache")
+	if len(f.calls) != before {
+		t.Errorf("an unversioned request fetched although a major was cached: %v", f.calls)
 	}
-	if got.Version != "v1.4.0" {
-		t.Errorf("Version = %q, want the newest of the major that was asked for", got.Version)
+	if got.Version != "v2.9.0" {
+		t.Errorf("Version = %q, want what is on disk", got.Version)
 	}
 }
 

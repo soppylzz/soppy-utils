@@ -36,6 +36,32 @@ func CloneURL(pkg string) string {
 	return "https://" + name
 }
 
+// CheckVersion rejects a version that is neither a major nor a whole version.
+//
+// `8.1` reads like a major and a minor, and the major alone is what matching uses — so
+// treating it as a major would serve v8.9.0 to a request that named 8.1, which is a
+// different answer to a different question. Refusing is the only honest thing to do with
+// a request whose meaning is not one of the two things this accepts.
+func CheckVersion(want string) error {
+	v := strings.TrimPrefix(want, "v")
+	if v == "" {
+		return nil // nothing asked for: the newest release
+	}
+	parts := strings.Split(v, ".")
+	if len(parts) != 1 && len(parts) != 3 {
+		return fmt.Errorf("%q is not a version spu understands: give a major like %q for "+
+			"the newest of that major, all three parts like %q for exactly that one, or "+
+			"nothing at all for the newest release", want, parts[0], want+".0")
+	}
+	for _, p := range parts {
+		if _, err := strconv.Atoi(p); err != nil {
+			return fmt.Errorf("%q is not a version spu understands: %q is not a number",
+				want, p)
+		}
+	}
+	return nil
+}
+
 // release is a tag that names a published version.
 type release struct {
 	tag                 string
@@ -86,6 +112,12 @@ func PickVersion(want string, tags []string) (string, error) {
 		if r.tag == want || strings.TrimPrefix(r.tag, "v") == strings.TrimPrefix(want, "v") {
 			return r.tag, nil
 		}
+	}
+	// A version with two parts is neither of the two things this accepts, and saying so is
+	// more use than saying it was not found.
+	if parts := strings.Split(strings.TrimPrefix(want, "v"), "."); len(parts) == 2 {
+		return "", fmt.Errorf("%q is not a whole version or a major: give a major like "+
+			"%q, or all three parts like %q", want, parts[0], want+".0")
 	}
 	return "", fmt.Errorf("version %q is not published; the majors that are: %s",
 		want, majors(releases))
@@ -140,13 +172,20 @@ func newest(rs []release) release { return rs[len(rs)-1] }
 // what could.
 func majors(rs []release) string {
 	seen := map[int]bool{}
-	var out []string
+	var numbers []int
 	for _, r := range rs {
 		if !seen[r.major] {
 			seen[r.major] = true
-			out = append(out, strconv.Itoa(r.major))
+			numbers = append(numbers, r.major)
 		}
 	}
-	sort.Strings(out)
+	// Sorted as numbers, not as text: a repository that reaches 10 would otherwise list
+	// its majors as 1, 10, 11, 2, 3 — which is the message somebody reads to find out what
+	// they should have asked for.
+	sort.Ints(numbers)
+	out := make([]string, 0, len(numbers))
+	for _, n := range numbers {
+		out = append(out, strconv.Itoa(n))
+	}
 	return strings.Join(out, ", ")
 }

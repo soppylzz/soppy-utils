@@ -1,6 +1,7 @@
 package thirdparty
 
 import (
+	"context"
 	"strings"
 	"testing"
 )
@@ -88,5 +89,70 @@ func TestMajorOf(t *testing.T) {
 		if got := majorOf(in); got != want {
 			t.Errorf("majorOf(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+func TestMajorsAreListedInNumericOrder(t *testing.T) {
+	// A repository that reaches 10 would otherwise list its majors as 1, 10, 11, 2, 3 —
+	// and this message is what somebody reads to find out what to ask for instead.
+	_, err := PickVersion("99", []string{
+		"v1.0.0", "v2.0.0", "v9.0.0", "v10.0.0", "v11.0.0",
+	})
+	if err == nil {
+		t.Fatal("PickVersion accepted a major nobody published")
+	}
+	said := err.Error()
+	if !strings.Contains(said, "1, 2, 9, 10, 11") {
+		t.Errorf("majors are not in numeric order: %q", said)
+	}
+}
+
+func TestAPartialVersionSaysWhatIsWrong(t *testing.T) {
+	// `8.1` is neither a major nor a whole version. "is not published" is true and does not
+	// say which of those it wanted.
+	_, err := PickVersion("8.1", []string{"v8.1.0"})
+	if err == nil {
+		t.Fatal("PickVersion accepted a two-part version")
+	}
+	said := err.Error()
+	if !strings.Contains(said, "8.1.0") || !strings.Contains(said, "major") {
+		t.Errorf("the message does not say what to give instead: %q", said)
+	}
+}
+
+func TestAPartialVersionIsRefusedRatherThanReadAsAMajor(t *testing.T) {
+	// `8.1` would otherwise be matched by its major, so a request that named 8.1 would be
+	// answered with v8.9.0 — a different answer to a different question, and nothing would
+	// say so.
+	for _, want := range []string{"8.1", "v8.1", "8.x", "latest", "8.1.2.3"} {
+		if err := CheckVersion(want); err == nil {
+			t.Errorf("CheckVersion accepted %q", want)
+		}
+	}
+	for _, want := range []string{"", "8", "v8", "8.1.0", "v8.1.0", "10"} {
+		if err := CheckVersion(want); err != nil {
+			t.Errorf("CheckVersion refused %q: %v", want, err)
+		}
+	}
+}
+
+func TestAPartialVersionIsRefusedBeforeTheCacheIsConsulted(t *testing.T) {
+	// The check has to come first: with v8 already cached, a request for 8.1 would be
+	// answered from that directory and never reach the parser.
+	cache := t.TempDir()
+	f := remote(t)
+	r := resolver(t, cache, f)
+	if _, err := r.Resolve(context.Background(), Request{
+		Package: "github.com/foo/bar", Version: "2"}); err != nil {
+		t.Fatalf("Resolve v2: %v", err)
+	}
+
+	_, err := r.Resolve(context.Background(), Request{
+		Package: "github.com/foo/bar", Version: "2.3"})
+	if err == nil {
+		t.Fatal("a partial version was answered from the cache")
+	}
+	if !strings.Contains(err.Error(), "2.3") {
+		t.Errorf("error %q does not name what was asked for", err)
 	}
 }
