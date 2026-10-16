@@ -149,11 +149,19 @@ func generate(ctx context.Context, project, home string, args []string, reply co
 	// Saying what stopped being tracked. Choosing is authoritative, so an item left out of
 	// the selection is handed over — and its file stays where it is, which leaves a
 	// document in the project that nothing reads and nothing explains.
-	recorded := make([]string, 0, len(led.Items))
+	//
+	// Compared against what the run actually recorded, not against what was chosen: the
+	// index and the MCP record are written by the run rather than chosen, and comparing
+	// against the selection announced that spu had stopped tracking its own bookkeeping.
+	before := make([]string, 0, len(led.Items))
 	for _, it := range led.Items {
-		recorded = append(recorded, it.ID)
+		before = append(before, it.ID)
 	}
-	for _, id := range missing(recorded, chosen) {
+	after := make([]string, 0, len(next.Items))
+	for _, it := range next.Items {
+		after = append(after, it.ID)
+	}
+	for _, id := range missing(before, after) {
 		_ = reply.Notify(fmt.Sprintf("%s is no longer tracked; whatever it generated is "+
 			"still there and is now yours", id))
 	}

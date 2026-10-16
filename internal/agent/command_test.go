@@ -820,3 +820,29 @@ func TestDroppingAnItemSaysSo(t *testing.T) {
 		t.Errorf("the file was removed although the message says it stays: %v", err)
 	}
 }
+
+func TestTheRecordsSpuWritesAreNotAnnouncedAsGivenAway(t *testing.T) {
+	// The index and the MCP record are written by the run rather than chosen, so comparing
+	// the old ledger against the selection announced that spu had stopped tracking its own
+	// bookkeeping — which is both wrong and noise in the one place a person looks for what
+	// happened to their project.
+	project := t.TempDir()
+	if err := run(t, project, &coretest.Recorder{},
+		"--items", "conduct-of-go,conduct-of-docs", "--harnesses", "claude"); err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+
+	reply := &coretest.Recorder{}
+	if err := run(t, project, reply, "--items", "conduct-of-go", "--harnesses", "claude"); err != nil {
+		t.Fatalf("second generate: %v", err)
+	}
+	said := strings.Join(reply.Notices, "\n")
+	if !strings.Contains(said, "conduct-of-docs") {
+		t.Errorf("the item that really was dropped was not reported:\n%s", said)
+	}
+	for _, id := range []string{"spu-index", "spu-mcp"} {
+		if strings.Contains(said, id) {
+			t.Errorf("spu announced that it stopped tracking its own %s:\n%s", id, said)
+		}
+	}
+}
