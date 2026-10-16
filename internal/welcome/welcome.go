@@ -21,12 +21,12 @@ import (
 	"github.com/soppylzz/soppy-utils/internal/managedfile"
 )
 
-//go:embed schema.json schema-v0.json templates/*.tmpl
+//go:embed schema.json schema-v1.json schema-v0.json templates/*.tmpl
 var assets embed.FS
 
 const start = "# >>> soppy-utils welcome >>>"
 const end = "# <<< soppy-utils welcome <<<"
-const templateRevision = 5
+const templateRevision = 6
 const hook = start + "\ncase $- in\n  *i*)\n    if [ -r \"$HOME/.config/soppy-utils/welcome/welcome.sh\" ]; then\n      SPU_WELCOME_INTERACTIVE=1 bash \"$HOME/.config/soppy-utils/welcome/welcome.sh\"\n    fi\n    ;;\nesac\n" + end + "\n"
 const legacyHook = start + "\ncase $- in\n  *i*)\n    if [ -r \"$HOME/.config/soppy-utils/welcome.sh\" ]; then\n      . \"$HOME/.config/soppy-utils/welcome.sh\"\n    fi\n    ;;\nesac\n" + end + "\n"
 
@@ -41,6 +41,7 @@ var Version = "dev"
 
 func Store(home string) configstore.Store {
 	schema, _ := assets.ReadFile("schema.json")
+	previous, _ := assets.ReadFile("schema-v1.json")
 	old, _ := assets.ReadFile("schema-v0.json")
 	name := os.Getenv("USER")
 	if name == "" {
@@ -53,11 +54,31 @@ func Store(home string) configstore.Store {
 	if device == "" {
 		device = "computer"
 	}
-	return configstore.Store{Home: home, Util: "welcome", Current: 1, Schema: schema, OldSchemas: map[int][]byte{0: old}, Defaults: map[string]any{"name": name, "device": device, "message": "Ready to hack the universe.", "rc": "none"}}
+	return configstore.Store{
+		Home: home, Util: "welcome", Current: 2, Schema: schema,
+		OldSchemas: map[int][]byte{0: old, 1: previous},
+		Defaults: map[string]any{
+			"name": name, "device": device,
+			"message": "Ready to hack the universe.", "rc": "none",
+			// Absent from a v1 file, so this is also the whole of the migration: a
+			// stored configuration keeps its values, gains this one, and is warned about
+			// until the user chooses to persist it.
+			"banner_in_tmux": false,
+		},
+	}
 }
 
 // ShellQuote encodes data as one Bash single-quoted word.
 func ShellQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", "'\"'\"'") + "'" }
+
+// bannerInTmux reports whether the banner prints inside tmux.
+//
+// An absent value is false, which is the default: one banner per pane is not what
+// anybody wants.
+func bannerInTmux(data map[string]any) bool {
+	inTmux, _ := data["banner_in_tmux"].(bool)
+	return inTmux
+}
 
 func Render(data map[string]any) ([]byte, error) {
 	body, err := assets.ReadFile("templates/banner.sh.tmpl")
@@ -75,6 +96,14 @@ func Render(data map[string]any) ([]byte, error) {
 if [[ ${SPU_WELCOME_INTERACTIVE:-} != 1 ]]; then exit 0; fi
 if [[ ! -t 0 && ! -t 1 && ! -t 2 ]] && ! (: </dev/tty) 2>/dev/null; then exit 0; fi
 `)
+	// Baked into the script rather than looked up at startup: the generated banner runs
+	// in the user's shell, and reading configuration there would make it depend on spu
+	// being installed and working.
+	if !bannerInTmux(data) {
+		out.WriteString("# Every new tmux pane runs the startup file too, and a banner in each of them is\n" +
+			"# not what anybody wants, so the banner stays out of tmux unless it was asked for.\n" +
+			"if [[ -n ${TMUX:-} ]]; then exit 0; fi\n")
+	}
 	for _, key := range []string{"name", "device", "message"} {
 		v, ok := data[key].(string)
 		if !ok {
@@ -364,6 +393,7 @@ func Run(ctx context.Context, home string, args []string, out io.Writer, reply c
 	device := fs.String("device", data["device"].(string), "")
 	message := fs.String("message", data["message"].(string), "")
 	rc := fs.String("rc", data["rc"].(string), "")
+	showInTmux := fs.Bool("banner-in-tmux", bannerInTmux(data), "")
 	interactive := fs.Bool("interactive", false, "")
 	if err := fs.Parse(args[1:]); err != nil {
 		return err
@@ -396,6 +426,7 @@ func Run(ctx context.Context, home string, args []string, out io.Writer, reply c
 			data[key] = value
 		}
 		data["name"], data["device"], data["message"], data["rc"] = *name, *device, *message, *rc
+		data["banner_in_tmux"] = *showInTmux
 
 		shouldAsk := args[0] == "edit" || args[0] == "migrate" || *interactive ||
 			args[0] == "install" && len(args) == 1

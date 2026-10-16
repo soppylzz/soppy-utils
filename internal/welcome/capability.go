@@ -39,6 +39,7 @@ var commands = []registry.Command{
 		{Name: "--message", Arg: "string", Summary: "The line printed under both"},
 		{Name: "--rc", Arg: "enum", Summary: "Which startup files to hook",
 			Options: []string{"none", "bash", "zsh", "both"}},
+		{Name: "--banner-in-tmux", Arg: "bool", Summary: "Print the banner in every tmux pane too"},
 		{Name: "--interactive", Arg: "bool", Summary: "Ask even when the flags are complete"},
 		{Name: "--answers", Arg: "path", Summary: "Read the values from a file instead of asking"},
 	}},

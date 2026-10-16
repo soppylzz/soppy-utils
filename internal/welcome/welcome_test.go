@@ -6,10 +6,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
-	"time"
 )
 
 func TestRenderQuotesInputAndStaysSilentWithoutTTY(t *testing.T) {
@@ -59,46 +57,14 @@ func TestRenderQuotesInputAndStaysSilentWithoutTTY(t *testing.T) {
 }
 
 func TestRenderWithRedirectedStreamsAndControllingTTY(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("script does not provide a Unix controlling terminal on Windows")
-	}
-	if _, err := exec.LookPath("script"); err != nil {
-		t.Skip("script is unavailable")
-	}
-	dir := t.TempDir()
+	// The banner has to survive stdout being redirected, because Powerlevel10k's instant
+	// prompt does exactly that while the shell loads its startup file.
 	banner, err := Render(map[string]any{"name": "Alice", "device": "Mac", "message": "Ready"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	path := filepath.Join(dir, "welcome.sh")
-	if err := os.WriteFile(path, banner, 0700); err != nil {
-		t.Fatal(err)
-	}
-	runner := filepath.Join(dir, "runner.sh")
-	if err := os.WriteFile(runner, []byte(`#!/usr/bin/env bash
-exec 3>&1
-exec </dev/null >"$SPU_TEST_CAPTURE" 2>&1
-SPU_WELCOME_INTERACTIVE=1 bash "$SPU_TEST_SCRIPT"
-exec 1>&3 2>&3
-cat "$SPU_TEST_CAPTURE"
-`), 0700); err != nil {
-		t.Fatal(err)
-	}
-	var args []string
-	if runtime.GOOS == "darwin" {
-		args = []string{"-q", "/dev/null", "bash", runner}
-	} else {
-		args = []string{"-q", "-c", "bash " + ShellQuote(runner), "/dev/null"}
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, "script", args...)
-	cmd.Env = append(os.Environ(), "SPU_TEST_SCRIPT="+path, "SPU_TEST_CAPTURE="+filepath.Join(dir, "captured"), "HOME="+dir)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("redirected terminal run failed: %v, output: %.160q", err, out)
-	}
-	if !strings.Contains(string(out), "Alice") || !strings.Contains(string(out), "Ready") {
+	out := runWithATty(t, banner)
+	if !strings.Contains(out, "Alice") || !strings.Contains(out, "Ready") {
 		t.Fatalf("banner was hidden while standard streams were redirected: %.160q", out)
 	}
 }

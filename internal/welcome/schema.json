@@ -12,7 +12,8 @@
       "name",
       "device",
       "message",
-      "rc"
+      "rc",
+      "banner_in_tmux"
     ],
     "fields": {
       "name": {
@@ -32,6 +33,10 @@
           "zsh": "Zsh",
           "both": "Both"
         }
+      },
+      "banner_in_tmux": {
+        "title": "Show the banner inside tmux",
+        "help": "Every new pane runs your startup file, so this is off unless you want one in each"
       }
     }
   },
@@ -40,7 +45,7 @@
       "const": "welcome"
     },
     "schema_version": {
-      "const": 1
+      "const": 2
     },
     "data": {
       "type": "object",
@@ -48,7 +53,8 @@
         "name",
         "device",
         "message",
-        "rc"
+        "rc",
+        "banner_in_tmux"
       ],
       "properties": {
         "name": {
@@ -69,6 +75,9 @@
             "zsh",
             "both"
           ]
+        },
+        "banner_in_tmux": {
+          "type": "boolean"
         }
       },
       "additionalProperties": false

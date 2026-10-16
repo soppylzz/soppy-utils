@@ -88,8 +88,8 @@ func TestInstallAsksThroughTheResponderWhenAUserIsAvailable(t *testing.T) {
 	}
 	// The form is the one the schema describes, so a field added to the schema appears
 	// in it without this code being touched.
-	if len(r.asked.Fields) != 4 {
-		t.Errorf("asked for %d fields, want the four the schema declares", len(r.asked.Fields))
+	if len(r.asked.Fields) != 5 {
+		t.Errorf("asked for %d fields, want the five the schema declares", len(r.asked.Fields))
 	}
 
 	script, err := os.ReadFile(scriptPath(Store(home)))
