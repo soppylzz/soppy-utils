@@ -142,3 +142,44 @@ func TestParseKeyValueRejectsWhatIsNotAnObject(t *testing.T) {
 		}
 	}
 }
+
+func TestControlsMapAMultiSelect(t *testing.T) {
+	// The item picker core asks for. A client that can draw a one-of choice but not a
+	// many-of one refuses the interaction the whole util is built on.
+	controls, err := controls(form.Spec{Fields: []form.Field{
+		{Key: "items", Type: form.Multiple, Title: "What to generate",
+			Options: []form.Option{
+				{Value: "conduct-of-commit", Label: "Commit conventions"},
+				{Value: "conduct-of-comment", Label: "Comment conventions"},
+			}},
+	}})
+	if err != nil {
+		t.Fatalf("controls: %v", err)
+	}
+	if controls[0].kind != multiSelectKind {
+		t.Errorf("kind = %q, want %q", controls[0].kind, multiSelectKind)
+	}
+	if controls[0].Options[1].Label != "Comment conventions" {
+		t.Errorf("options lost their labels: %+v", controls[0].Options)
+	}
+}
+
+func TestAMultiSelectKeepsTheValuesAlreadyChosen(t *testing.T) {
+	// Re-running the picker has to show what was picked last time, or every run reads as
+	// a fresh decision and the user re-answers a question that was already settled.
+	controls, err := controls(form.Spec{Fields: []form.Field{
+		{Key: "items", Type: form.Multiple, Title: "What to generate",
+			Value:   []any{"conduct-of-commit"},
+			Options: []form.Option{{Value: "conduct-of-commit", Label: "Commit conventions"}}},
+	}})
+	if err != nil {
+		t.Fatalf("controls: %v", err)
+	}
+	got, ok := controls[0].Initial.([]string)
+	if !ok {
+		t.Fatalf("initial = %#v, want a list of strings", controls[0].Initial)
+	}
+	if len(got) != 1 || got[0] != "conduct-of-commit" {
+		t.Errorf("initial = %v, want the stored choices", got)
+	}
+}

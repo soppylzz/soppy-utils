@@ -16,10 +16,11 @@ import (
 type kind string
 
 const (
-	inputKind    kind = "input"
-	confirmKind  kind = "confirm"
-	selectKind   kind = "select"
-	keyValueKind kind = "keyvalue"
+	inputKind       kind = "input"
+	confirmKind     kind = "confirm"
+	selectKind      kind = "select"
+	keyValueKind    kind = "keyvalue"
+	multiSelectKind kind = "multiselect"
 )
 
 // control is a field as this client will draw it.
@@ -59,6 +60,13 @@ func controls(spec form.Spec) ([]control, error) {
 
 		case form.KeyValue:
 			c.kind = keyValueKind
+
+		case form.Multiple:
+			c.kind = multiSelectKind
+			// A set that arrives from JSON is a list of anything; the control below binds
+			// a list of strings, and a nil one means nothing was chosen yet.
+			c.Initial = stringSlice(f.Value)
+			c.Options = f.Options
 
 		default:
 			// Nothing is dropped silently. A window client and a terminal client draw

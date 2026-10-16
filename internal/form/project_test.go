@@ -254,3 +254,85 @@ func TestAKeyValueMapOfNonStringsIsRejected(t *testing.T) {
 		t.Fatal("FromSchema accepted a map of something other than strings, want an error")
 	}
 }
+
+func TestProjectAMultiSelectField(t *testing.T) {
+	// The one input an item picker rests on: the answer is a set, and a set is not an
+	// enum with several values ticked by hand.
+	spec, err := FromSchema(envelope(`{
+	  "type": "object",
+	  "properties": {"items": {
+	    "type": "array",
+	    "uniqueItems": true,
+	    "items": {"enum": ["commit", "comments", "docs"]}
+	  }}
+	}`), map[string]any{"items": []any{"commit", "docs"}})
+	if err != nil {
+		t.Fatalf("FromSchema: %v", err)
+	}
+
+	got := fieldByKey(t, spec, "items")
+	if got.Type != Multiple {
+		t.Fatalf("type = %q, want %q", got.Type, Multiple)
+	}
+	if len(got.Options) != 3 {
+		t.Fatalf("options = %v, want the three choices", got.Options)
+	}
+	if got.Options[0].Value != "commit" || got.Options[2].Value != "docs" {
+		t.Errorf("options = %v, want them in the order the schema lists them", got.Options)
+	}
+}
+
+func TestAMultiSelectKeepsTheLabelsFromTheHints(t *testing.T) {
+	// A choice is named once and shown once, so an item id that reads badly does not have
+	// to be renamed on disk to read well on screen.
+	spec, err := FromSchema(envelope(`{
+	  "type": "object",
+	  "properties": {"items": {
+	    "type": "array",
+	    "items": {"enum": ["conduct-of-commit"]}
+	  }}
+	}`), nil)
+	if err != nil {
+		t.Fatalf("FromSchema: %v", err)
+	}
+	if got := fieldByKey(t, spec, "items"); got.Options[0].Label != "conduct-of-commit" {
+		t.Errorf("label = %q, want the value when no label is given", got.Options[0].Label)
+	}
+}
+
+func TestAnArrayThatIsNotAChoiceIsRejected(t *testing.T) {
+	// A list of free text is not something a client can draw a control for, so it has to
+	// fail where the util author sees it rather than at the prompt.
+	_, err := FromSchema(envelope(`{
+	  "type": "object",
+	  "properties": {"lines": {"type": "array", "items": {"type": "string"}}}
+	}`), nil)
+	if err == nil {
+		t.Fatal("FromSchema accepted an array of free text, want an error")
+	}
+	if !strings.Contains(err.Error(), "lines") {
+		t.Errorf("error %q does not name the field", err)
+	}
+}
+
+func TestProjectABareObjectSchema(t *testing.T) {
+	// A util's schema is an envelope with util, schema_version, and data; an item's
+	// questions are the object itself. Both are questions a client has to draw, and
+	// wrapping the second in a synthetic envelope to reuse the first would put a shape
+	// in the data that nothing wrote.
+	spec, err := FromObjectSchema([]byte(`{
+	  "type": "object",
+	  "required": ["name"],
+	  "properties": {"name": {"type": "string"}, "items": {
+	    "type": "array", "items": {"enum": ["a", "b"]}}}
+	}`), map[string]any{"name": "Alice"})
+	if err != nil {
+		t.Fatalf("FromObjectSchema: %v", err)
+	}
+	if got := fieldByKey(t, spec, "name"); got.Type != String || !got.Required {
+		t.Errorf("name = %+v, want a required string", got)
+	}
+	if got := fieldByKey(t, spec, "items"); got.Type != Multiple || len(got.Options) != 2 {
+		t.Errorf("items = %+v, want a multi-select with two choices", got)
+	}
+}

@@ -70,6 +70,25 @@ func drawForm(ctx context.Context, in io.Reader, out io.Writer, spec form.Spec) 
 				return c.Key, values
 			})
 
+		case multiSelectKind:
+			v := stringSlice(c.Initial)
+			if v == nil {
+				v = []string{}
+			}
+			options := make([]huh.Option[string], 0, len(c.Options))
+			for _, o := range c.Options {
+				options = append(options, huh.NewOption(o.Label, o.Value))
+			}
+			field := huh.NewMultiSelect[string]().Title(c.Title).Options(options...).Value(&v)
+			if c.Help != "" {
+				field = field.Description(c.Help)
+			}
+			fields = append(fields, field)
+			// A set with nothing chosen is an empty list rather than a missing key: the
+			// user was asked and said none, which is a different answer from not being
+			// asked, and the answer has to survive the trip back.
+			read = append(read, func() (string, any) { return c.Key, v })
+
 		case selectKind:
 			v := stringValue(c.Initial)
 			options := make([]huh.Option[string], 0, len(c.Options))
@@ -113,6 +132,27 @@ func drawConfirm(ctx context.Context, in io.Reader, out io.Writer, question stri
 func stringValue(v any) string {
 	s, _ := v.(string)
 	return s
+}
+
+// stringSlice reads a stored set. It arrives from JSON as a list of anything, and is
+// written by this client as a list of strings, so both are accepted.
+func stringSlice(v any) []string {
+	switch got := v.(type) {
+	case nil:
+		return nil
+	case []string:
+		return got
+	case []any:
+		out := make([]string, 0, len(got))
+		for _, item := range got {
+			if s, ok := item.(string); ok {
+				out = append(out, s)
+			}
+		}
+		return out
+	default:
+		return nil
+	}
 }
 
 func boolValue(v any) bool {

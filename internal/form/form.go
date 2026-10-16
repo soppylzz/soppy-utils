@@ -28,6 +28,13 @@ const (
 	// edits and markup renders it as a table, which is why it is a kind of its own
 	// rather than being flattened into text on the way in.
 	KeyValue Type = "keyvalue"
+
+	// Multiple is a set of choices from a fixed list.
+	//
+	// Not Enum with several values ticked: the answer is a set, and a client that offers
+	// one-of and many-of through the same control makes the two indistinguishable in the
+	// result. Its Value is a list, and it carries Options like an Enum does.
+	Multiple Type = "multiple"
 )
 
 // Spec is a form.

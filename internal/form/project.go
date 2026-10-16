@@ -19,20 +19,41 @@ func FromSchema(schema []byte, values map[string]any) (Spec, error) {
 	if doc.Properties.Data == nil {
 		return Spec{}, fmt.Errorf("schema has no data object to build a form from")
 	}
+	return specFrom(doc.Properties.Data.Properties, doc.Properties.Data.Required, doc.UI, values)
+}
 
-	required := make(map[string]bool, len(doc.Properties.Data.Required))
-	for _, key := range doc.Properties.Data.Required {
+// FromObjectSchema projects a form from the object itself rather than from an envelope.
+//
+// A util's schema wraps its fields in a data object; an item's questions are the object.
+// Both are the same question to a client, and wrapping the second in a synthetic envelope
+// would put a shape in it that nothing wrote.
+func FromObjectSchema(schema []byte, values map[string]any) (Spec, error) {
+	var raw dataSchema
+	if err := json.Unmarshal(schema, &raw); err != nil {
+		return Spec{}, fmt.Errorf("schema: %w", err)
+	}
+	if len(raw.Properties) == 0 {
+		return Spec{}, nil
+	}
+	return specFrom(raw.Properties, raw.Required, nil, values)
+}
+
+func specFrom(properties map[string]json.RawMessage, requiredList []string, ui *uiHints,
+	values map[string]any) (Spec, error) {
+
+	required := make(map[string]bool, len(requiredList))
+	for _, key := range requiredList {
 		required[key] = true
 	}
 
 	spec := Spec{}
-	if doc.UI != nil {
-		spec.Title = doc.UI.Title
+	if ui != nil {
+		spec.Title = ui.Title
 	}
 
-	for _, key := range orderedKeys(doc.Properties.Data.Properties, doc.UI) {
+	for _, key := range orderedKeys(properties, ui) {
 		var raw fieldSchema
-		if err := json.Unmarshal(doc.Properties.Data.Properties[key], &raw); err != nil {
+		if err := json.Unmarshal(properties[key], &raw); err != nil {
 			return Spec{}, fmt.Errorf("field %q: %w", key, err)
 		}
 		kind, err := raw.kind()
@@ -41,8 +62,8 @@ func FromSchema(schema []byte, values map[string]any) (Spec, error) {
 		}
 
 		hints := fieldHints{}
-		if doc.UI != nil {
-			hints = doc.UI.Fields[key]
+		if ui != nil {
+			hints = ui.Fields[key]
 		}
 
 		field := Field{
@@ -55,8 +76,16 @@ func FromSchema(schema []byte, values map[string]any) (Spec, error) {
 			MinLength: raw.MinLength,
 			MaxLength: raw.MaxLength,
 		}
-		if kind == Enum {
+		switch kind {
+		case Enum:
 			field.Options = optionsFor(raw.Enum, hints)
+		case Multiple:
+			// The choices live on the items, because that is where a list keeps them.
+			var items fieldSchema
+			if err := json.Unmarshal(raw.Items, &items); err != nil {
+				return Spec{}, fmt.Errorf("field %q: items: %w", key, err)
+			}
+			field.Options = optionsFor(items.Enum, hints)
 		}
 		spec.Fields = append(spec.Fields, field)
 	}
@@ -149,6 +178,10 @@ type fieldSchema struct {
 	// arbitrary one; an object whose values are all strings is a map it can.
 	Properties           json.RawMessage `json:"properties"`
 	AdditionalProperties json.RawMessage `json:"additionalProperties"`
+
+	// Items is what an array holds. Only a list of choices is renderable; anything else
+	// is free text with bullets, which is not a control.
+	Items json.RawMessage `json:"items"`
 }
 
 func (f fieldSchema) kind() (Type, error) {
@@ -159,6 +192,17 @@ func (f fieldSchema) kind() (Type, error) {
 		return String, nil
 	case f.Type == "boolean":
 		return Boolean, nil
+
+	case f.Type == "array":
+		var items fieldSchema
+		if err := json.Unmarshal(f.Items, &items); err != nil {
+			return "", fmt.Errorf("is an array whose items cannot be read: %w", err)
+		}
+		if len(items.Enum) == 0 {
+			return "", fmt.Errorf("is an array that is not a choice from a fixed list, " +
+				"so a client cannot render it as a multi-select")
+		}
+		return Multiple, nil
 
 	case f.Type == "object":
 		if len(f.Properties) > 0 {
