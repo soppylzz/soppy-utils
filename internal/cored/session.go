@@ -73,6 +73,30 @@ func (s *session) Ask(ctx context.Context, spec form.Spec) (map[string]any, erro
 	return values, nil
 }
 
+// Confirm asks a yes or no question.
+//
+// A client that cannot ask is answered no rather than asked and abandoned: a step that
+// needed approval must not proceed without it, and there is nobody to give one.
+func (s *session) Confirm(ctx context.Context, question string) (bool, error) {
+	if !s.capabilities.Confirm {
+		return false, nil
+	}
+
+	answer, err := s.question(ctx, "session/request_confirm", map[string]any{"question": question})
+	if err != nil {
+		return false, err
+	}
+	var got struct {
+		Confirmed bool `json:"confirmed"`
+	}
+	if len(answer) > 0 {
+		if err := json.Unmarshal(answer, &got); err != nil {
+			return false, fmt.Errorf("answer to session %s: %w", s.id, err)
+		}
+	}
+	return got.Confirmed, nil
+}
+
 // AskActions offers work that core cannot do itself.
 //
 // A client that did not say it can run actions is asked nothing. It is told what is

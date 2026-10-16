@@ -23,10 +23,12 @@ type recorder struct {
 	canAsk  bool
 	answers map[string]any
 
-	asked   *form.Spec
-	notices []string
-	actions *action.Request
-	finish  json.RawMessage
+	answersConfirm bool
+	asked          *form.Spec
+	confirmed      []string
+	notices        []string
+	actions        *action.Request
+	finish         json.RawMessage
 }
 
 func (r *recorder) CanAsk() bool { return r.canAsk }
@@ -47,6 +49,12 @@ func (r *recorder) Ask(_ context.Context, spec form.Spec) (map[string]any, error
 func (r *recorder) AskActions(_ context.Context, req action.Request) (action.Outcome, error) {
 	r.actions = &req
 	return action.Outcome{Declined: true}, nil
+}
+
+func (r *recorder) Confirm(_ context.Context, question string) (bool, error) {
+	r.confirmed = append(r.confirmed, question)
+	// No by default, which is what a client with nobody to ask would answer.
+	return r.answersConfirm, nil
 }
 
 func (r *recorder) Finish(result json.RawMessage) error {

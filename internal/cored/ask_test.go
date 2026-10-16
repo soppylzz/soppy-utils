@@ -201,3 +201,85 @@ func TestAnAnswerForAnUnknownSessionDoesNotBreakTheConnection(t *testing.T) {
 		t.Errorf("the connection broke after a stray answer: %+v", follow.Error)
 	}
 }
+
+func confirmAsker(question string, answers chan bool) core.Handler {
+	return scriptedHandler{run: func(ctx context.Context, cmd core.Command, reply core.Responder) error {
+		ok, err := reply.Confirm(ctx, question)
+		if err != nil {
+			return err
+		}
+		answers <- ok
+		return reply.Finish(nil)
+	}}
+}
+
+func (c *client) answerConfirm(requestID int64, sessionID string, confirmed bool) {
+	c.t.Helper()
+	params := fmt.Sprintf(`{"session_id":%q,"request_id":%d,"answer":{"confirmed":%t}}`,
+		sessionID, requestID, confirmed)
+	if reply := c.call("session/respond", params); reply.Error != nil {
+		c.t.Fatalf("session/respond: %+v", reply.Error)
+	}
+}
+
+func TestACommandCanAskForConfirmation(t *testing.T) {
+	for _, want := range []bool{true, false} {
+		answers := make(chan bool, 1)
+		c := startDaemon(t, Options{Handler: confirmAsker("Replace existing file?", answers)})
+		c.withCapabilities()
+
+		id := c.startSession("license")
+
+		var got struct {
+			SessionID string `json:"session_id"`
+			RequestID int64  `json:"request_id"`
+			Question  string `json:"question"`
+		}
+		for i := 0; i < 20; i++ {
+			msg := c.next()
+			if msg.Method != "session/request_confirm" {
+				continue
+			}
+			if err := json.Unmarshal(msg.Params, &got); err != nil {
+				t.Fatalf("unmarshal request_confirm: %v", err)
+			}
+			break
+		}
+		if got.Question == "" {
+			t.Fatal("no confirmation was asked for")
+		}
+		if got.SessionID != id {
+			t.Errorf("session_id = %q, want %q", got.SessionID, id)
+		}
+
+		c.answerConfirm(got.RequestID, id, want)
+
+		select {
+		case answer := <-answers:
+			if answer != want {
+				t.Errorf("the command saw %v, want %v", answer, want)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatal("the answer never reached the command")
+		}
+	}
+}
+
+func TestAClientThatCannotConfirmIsAnsweredNo(t *testing.T) {
+	// A destructive step with nobody to approve it must not proceed. Answering no is the
+	// only safe reading of "nobody could be asked".
+	answers := make(chan bool, 1)
+	c := startDaemon(t, Options{Handler: confirmAsker("Replace existing file?", answers)})
+	// No action execution and no confirmation in the handshake.
+	c.ensureInitialized()
+	c.startSession("license")
+
+	select {
+	case answer := <-answers:
+		if answer {
+			t.Error("a client that cannot ask was answered yes")
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Confirm never returned for a client that cannot ask")
+	}
+}

@@ -203,3 +203,38 @@ func TestOutputCanBeSentToTheErrorStream(t *testing.T) {
 		t.Errorf("stderr = %q, want the text core chose to put there", errOut.String())
 	}
 }
+
+func TestAConfirmationIsAskedAndAnswered(t *testing.T) {
+	answers := make(chan bool, 1)
+	c, out, errOut := newTestClient(t, cored.Options{
+		Handler: confirmAsker("Replace existing file?", answers),
+	}, true)
+
+	var asked string
+	c.Confirm = func(question string) (bool, error) {
+		asked = question
+		return true, nil
+	}
+
+	if code, err := run(t, c); err != nil || code != 0 {
+		t.Fatalf("Run = %d, %v", code, err)
+	}
+	if asked != "Replace existing file?" {
+		t.Errorf("the client was asked %q, want the question core sent", asked)
+	}
+	// A question is not progress: it goes to the terminal, not into whatever is being
+	// piped.
+	if out.String() != "" {
+		t.Errorf("stdout = %q, want nothing", out.String())
+	}
+	_ = errOut
+
+	select {
+	case got := <-answers:
+		if !got {
+			t.Error("the answer the user gave did not reach the command")
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the answer never reached the command")
+	}
+}

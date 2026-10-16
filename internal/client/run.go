@@ -105,6 +105,11 @@ func (c *Client) Run(ctx context.Context, util string, args []string) (int, erro
 				return 1, err
 			}
 
+		case "session/request_confirm":
+			if err := c.answerConfirm(ctx, sessionID, msg.Params); err != nil {
+				return 1, err
+			}
+
 		case "session/request_action":
 			if err := c.performRequestedActions(ctx, sessionID, msg.Params); err != nil {
 				return 1, err
@@ -152,6 +157,33 @@ func (c *Client) answerForm(ctx context.Context, sessionID string, params json.R
 		return c.abandon(sessionID, err.Error())
 	}
 	answer, err := json.Marshal(values)
+	if err != nil {
+		return err
+	}
+	return c.respond(sessionID, got.RequestID, answer)
+}
+
+func (c *Client) answerConfirm(ctx context.Context, sessionID string, params json.RawMessage) error {
+	var got struct {
+		RequestID int64  `json:"request_id"`
+		Question  string `json:"question"`
+	}
+	if err := json.Unmarshal(params, &got); err != nil {
+		return fmt.Errorf("session/request_confirm: %w", err)
+	}
+
+	confirmed := false
+	if c.Interactive && c.Confirm != nil {
+		ok, err := c.Confirm(got.Question)
+		if err != nil {
+			return c.abandon(sessionID, err.Error())
+		}
+		confirmed = ok
+	}
+	// A question that cannot be asked is answered no, and the session carries on: the
+	// command decides what a refusal means, and a destructive step must not proceed
+	// without somebody approving it.
+	answer, err := json.Marshal(map[string]any{"confirmed": confirmed})
 	if err != nil {
 		return err
 	}
@@ -227,7 +259,8 @@ func (c *Client) finish(params json.RawMessage) (int, error) {
 	}
 
 	if got.Error != "" {
-		fmt.Fprintln(c.errOut, got.Error)
+		// Returned rather than printed: whoever ran the client decides what to do with a
+		// failure, and a library that prints leaves no way for the caller to.
 		return 1, errors.New(got.Error)
 	}
 

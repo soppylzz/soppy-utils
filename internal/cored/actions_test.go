@@ -44,14 +44,16 @@ func (c *client) reportOutcome(requestID int64, sessionID, outcome string) {
 	}
 }
 
-// withActionExecution handshakes a client that can run commands on the user's behalf.
-func (c *client) withActionExecution() {
+// withCapabilities handshakes a client that can act and can be asked.
+func (c *client) withCapabilities() {
 	c.t.Helper()
 	c.initialized = true
 	body, err := json.Marshal(map[string]any{"client": map[string]any{
 		"protocol_versions": []int{protocol.Version},
-		"capabilities":      map[string]any{"action_execution": true},
-		"env":               map[string]any{"os": "linux", "path": ""},
+		"capabilities": map[string]any{
+			"action_execution": true, "confirm": true, "interactive": true,
+		},
+		"env": map[string]any{"os": "linux", "path": ""},
 	}})
 	if err != nil {
 		c.t.Fatalf("marshal: %v", err)
@@ -80,7 +82,7 @@ func TestACommandCanOfferActionsToTheClient(t *testing.T) {
 		},
 	}})
 
-	c.withActionExecution()
+	c.withCapabilities()
 	id := c.startSession("welcome")
 
 	reqID, req := c.awaitAction()
@@ -125,7 +127,7 @@ func TestACommandSeesWhichActionsFailed(t *testing.T) {
 		},
 	}})
 
-	c.withActionExecution()
+	c.withCapabilities()
 	id := c.startSession("welcome")
 	reqID, _ := c.awaitAction()
 
@@ -208,7 +210,7 @@ func TestAnEmptyOfferIsToldRatherThanAsked(t *testing.T) {
 		},
 	}})
 
-	c.withActionExecution()
+	c.withCapabilities()
 	id := c.startSession("welcome")
 
 	select {

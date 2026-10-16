@@ -139,3 +139,17 @@ func newDaemon(t *testing.T, opts cored.Options) transport.Endpoint {
 
 	return ep
 }
+
+// confirmAsker asks one yes-or-no question and reports the answer.
+func confirmAsker(question string, answers chan bool) core.Handler {
+	return handlerFunc(func(ctx context.Context, cmd core.Command, reply core.Responder) error {
+		ok, err := reply.Confirm(ctx, question)
+		if err != nil {
+			return err
+		}
+		if answers != nil {
+			answers <- ok
+		}
+		return reply.Finish(nil)
+	})
+}

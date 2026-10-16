@@ -56,6 +56,13 @@ type Responder interface {
 	// asked nothing, and the outcome says so.
 	AskActions(ctx context.Context, req action.Request) (action.Outcome, error)
 
+	// Confirm asks a yes or no question.
+	//
+	// Not a form with one checkbox: nothing is being configured, and a client may render
+	// a confirmation differently from a field. A client that cannot ask answers no,
+	// because a step that needed approval must not proceed without it.
+	Confirm(ctx context.Context, question string) (bool, error)
+
 	// Finish ends the session and carries its result.
 	Finish(result json.RawMessage) error
 
