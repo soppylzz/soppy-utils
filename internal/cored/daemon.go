@@ -18,6 +18,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/soppylzz/soppy-utils/internal/form"
 	"github.com/soppylzz/soppy-utils/internal/protocol"
 	"github.com/soppylzz/soppy-utils/internal/registry"
 	"github.com/soppylzz/soppy-utils/internal/transport"
@@ -31,7 +32,14 @@ type Command struct {
 
 // Responder is how a running command talks to the client that asked for it.
 type Responder interface {
+	// Notify reports progress. Nobody is expected to answer.
 	Notify(message string) error
+
+	// Ask sends a form and waits for the values. It is how a command collects what it
+	// needs without knowing how the client will ask.
+	Ask(ctx context.Context, spec form.Spec) (map[string]any, error)
+
+	// Finish ends the session and carries its result.
 	Finish(result json.RawMessage) error
 }
 
@@ -323,36 +331,141 @@ type connState struct {
 	conn        *clientConn
 	env         Env
 	initialized bool
+
+	mu       sync.Mutex
+	sessions map[string]*session
+}
+
+func (s *connState) addSession(sess *session) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.sessions == nil {
+		s.sessions = make(map[string]*session)
+	}
+	s.sessions[sess.id] = sess
+}
+
+func (s *connState) dropSession(id string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.sessions, id)
+}
+
+func (s *connState) session(id string) (*session, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	sess, ok := s.sessions[id]
+	return sess, ok
+}
+
+// methodNeedsSession lists the methods that depend on the session environment, which
+// arrives with the handshake.
+var methodNeedsSession = map[string]bool{
+	"capabilities/list": true,
+	"command/run":       true,
+	"session/respond":   true,
+	"session/cancel":    true,
+}
+
+// methodIsKnown reports whether a method exists at all.
+//
+// It is checked before the session guard so that an unknown method is reported as
+// unknown rather than as needing a handshake: a typo and a missing handshake send a
+// caller in different directions.
+func methodIsKnown(method string) bool {
+	switch method {
+	case "initialize", "server/shutdown":
+		return true
+	}
+	return methodNeedsSession[method]
 }
 
 func (d *Daemon) dispatch(
 	ctx context.Context, state *connState, sessions *sync.WaitGroup, msg protocol.Incoming,
 ) (json.RawMessage, *protocol.Error) {
-	switch msg.Method {
-	case "initialize":
-		return d.initialize(state, msg.Params)
-	case "server/shutdown":
-		return json.RawMessage(`{}`), nil
-	case "capabilities/list", "command/run":
-		// Both need the session's environment, which arrives with the handshake.
-		// Answering before it would mean judging against the daemon's own, which is the
-		// mistake this arrangement exists to avoid.
-		if !state.initialized {
-			return nil, &protocol.Error{
-				Code:    protocol.CodeInvalidParams,
-				Message: msg.Method + " needs a session: send initialize first",
-			}
-		}
-		if msg.Method == "capabilities/list" {
-			return d.capabilities(state)
-		}
-		return d.startSession(ctx, state.conn, sessions, msg.Params)
-	default:
+	if !methodIsKnown(msg.Method) {
 		return nil, &protocol.Error{
 			Code:    protocol.CodeMethodNotFound,
 			Message: fmt.Sprintf("unknown method %q", msg.Method),
 		}
 	}
+	if methodNeedsSession[msg.Method] && !state.initialized {
+		return nil, &protocol.Error{
+			Code:    protocol.CodeInvalidParams,
+			Message: msg.Method + " needs a session: send initialize first",
+		}
+	}
+
+	switch msg.Method {
+	case "initialize":
+		return d.initialize(state, msg.Params)
+	case "server/shutdown":
+		return json.RawMessage(`{}`), nil
+	case "capabilities/list":
+		return d.capabilities(state)
+	case "command/run":
+		return d.startSession(ctx, state, sessions, msg.Params)
+	case "session/respond":
+		return d.respond(state, msg.Params)
+	case "session/cancel":
+		return d.cancelSession(state, msg.Params)
+	}
+	return nil, &protocol.Error{
+		Code:    protocol.CodeInternalError,
+		Message: "method " + msg.Method + " is known but was not routed",
+	}
+}
+
+func (d *Daemon) respond(state *connState, params json.RawMessage) (json.RawMessage, *protocol.Error) {
+	var p struct {
+		SessionID string          `json:"session_id"`
+		RequestID int64           `json:"request_id"`
+		Values    json.RawMessage `json:"values"`
+	}
+	if err := json.Unmarshal(params, &p); err != nil {
+		return nil, &protocol.Error{
+			Code:    protocol.CodeInvalidParams,
+			Message: fmt.Sprintf("session/respond params: %v", err),
+		}
+	}
+
+	sess, ok := state.session(p.SessionID)
+	if !ok || !sess.deliver(p.RequestID, p.Values) {
+		// A late answer is ordinary: the user filled a form and the session was
+		// cancelled first. Reported, because a client answering the wrong question is
+		// worth seeing, but it must not take the connection down.
+		return nil, &protocol.Error{
+			Code: protocol.CodeInvalidParams,
+			Message: fmt.Sprintf("no question %d is waiting in session %s",
+				p.RequestID, p.SessionID),
+		}
+	}
+	return json.RawMessage(`{}`), nil
+}
+
+func (d *Daemon) cancelSession(state *connState, params json.RawMessage) (json.RawMessage, *protocol.Error) {
+	var p struct {
+		SessionID string `json:"session_id"`
+	}
+	if err := json.Unmarshal(params, &p); err != nil {
+		return nil, &protocol.Error{
+			Code:    protocol.CodeInvalidParams,
+			Message: fmt.Sprintf("session/cancel params: %v", err),
+		}
+	}
+
+	sess, ok := state.session(p.SessionID)
+	if !ok {
+		return nil, &protocol.Error{
+			Code:    protocol.CodeInvalidParams,
+			Message: "session " + p.SessionID + " is not running",
+		}
+	}
+	// Cancelling the context is the whole mechanism: a handler blocked in Ask returns,
+	// one blocked on a child process sees it, and the daemon reports the end of the
+	// session through the same path as any other failure.
+	sess.cancel()
+	return json.RawMessage(`{}`), nil
 }
 
 // startSession answers immediately with a session id and runs the command in the
@@ -363,7 +476,7 @@ func (d *Daemon) dispatch(
 // never cancel anything, which is exactly the situation a form or a long install
 // creates.
 func (d *Daemon) startSession(
-	ctx context.Context, conn *clientConn, sessions *sync.WaitGroup, params json.RawMessage,
+	ctx context.Context, state *connState, sessions *sync.WaitGroup, params json.RawMessage,
 ) (json.RawMessage, *protocol.Error) {
 	var p struct {
 		Util string   `json:"util"`
@@ -388,14 +501,16 @@ func (d *Daemon) startSession(
 	s := &session{
 		id:     fmt.Sprintf("s%d", d.sessionSeq.Add(1)),
 		cancel: cancel,
-		conn:   conn,
+		conn:   state.conn,
 	}
+	state.addSession(s)
 
 	sessions.Add(1)
 	d.inflight.Add(1)
 	go func() {
 		defer d.inflight.Done()
 		defer sessions.Done()
+		defer state.dropSession(s.id)
 		defer cancel()
 
 		err := d.opts.Handler.Run(sctx, Command{Util: p.Util, Args: p.Args}, s)

@@ -34,7 +34,7 @@ func field(t *testing.T, msg protocol.Incoming, key string) string {
 func (c *client) await(method string) protocol.Incoming {
 	c.t.Helper()
 	for i := 0; i < 20; i++ {
-		msg := c.read()
+		msg := c.next()
 		if msg.Kind() == protocol.KindNotification && msg.Method == method {
 			return msg
 		}

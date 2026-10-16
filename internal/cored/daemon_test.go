@@ -35,6 +35,26 @@ type client struct {
 	// initialized records that this connection has handshaken. Every session method
 	// needs the environment that arrives with the handshake.
 	initialized bool
+
+	// queued holds messages read while waiting for a response.
+	//
+	// They are kept rather than dropped. A notification that arrives while a caller
+	// happens to be waiting for a response is still a message somebody needs to see,
+	// and dropping it is how a test quietly stops observing what it thinks it is
+	// observing. The real client has the same obligation.
+	queued []protocol.Incoming
+}
+
+// next returns the oldest message that has not been consumed, whether it arrived while
+// a caller was waiting for a response or afterwards.
+func (c *client) next() protocol.Incoming {
+	c.t.Helper()
+	if len(c.queued) > 0 {
+		msg := c.queued[0]
+		c.queued = c.queued[1:]
+		return msg
+	}
+	return c.read()
 }
 
 // dial opens a second connection to the same daemon, which is how a test asks what
@@ -72,8 +92,8 @@ func (c *client) read() protocol.Incoming {
 	return msg
 }
 
-// call sends a request and returns the next response. Notifications that arrive
-// first are dropped, since a response is what the caller is waiting for.
+// call sends a request and returns the next response, queueing anything else it reads
+// on the way.
 func (c *client) call(method string, params string) protocol.Incoming {
 	c.t.Helper()
 	c.send(1, method, params)
@@ -82,6 +102,7 @@ func (c *client) call(method string, params string) protocol.Incoming {
 		if msg.Kind() == protocol.KindResponse {
 			return msg
 		}
+		c.queued = append(c.queued, msg)
 	}
 }
 

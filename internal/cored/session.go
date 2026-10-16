@@ -7,6 +7,7 @@ import (
 	"net"
 	"sync"
 
+	"github.com/soppylzz/soppy-utils/internal/form"
 	"github.com/soppylzz/soppy-utils/internal/protocol"
 )
 
@@ -42,8 +43,88 @@ type session struct {
 	cancel context.CancelFunc
 	conn   *clientConn
 
-	mu    sync.Mutex
-	ended bool
+	mu       sync.Mutex
+	ended    bool
+	requests int64
+	waiting  map[int64]chan json.RawMessage
+}
+
+// Ask sends a form to the client and waits for the answers.
+//
+// This is the heart of what core does not do: it decides which fields it needs and
+// what each accepts, and the client decides how to ask. A terminal renders one with a
+// form library and a window renders the same description with markup, which is why the
+// two clients can be equal rather than one of them degrading into a prompt.
+//
+// The answers come back on a correlation id rather than as a reply to this message.
+// Both directions of this connection carry requests, and sharing one id space between
+// them would mean a client's request 1 and core's request 1 are the same number.
+func (s *session) Ask(ctx context.Context, spec form.Spec) (map[string]any, error) {
+	s.mu.Lock()
+	if s.ended {
+		s.mu.Unlock()
+		return nil, fmt.Errorf("session %s has already finished", s.id)
+	}
+	s.requests++
+	id := s.requests
+	if s.waiting == nil {
+		s.waiting = make(map[int64]chan json.RawMessage)
+	}
+	answer := make(chan json.RawMessage, 1)
+	s.waiting[id] = answer
+	s.mu.Unlock()
+
+	defer func() {
+		s.mu.Lock()
+		delete(s.waiting, id)
+		s.mu.Unlock()
+	}()
+
+	payload, err := json.Marshal(map[string]any{
+		"session_id": s.id,
+		"request_id": id,
+		"spec":       spec,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("encode session/request_input: %w", err)
+	}
+	if err := s.conn.write(protocol.NewNotification("session/request_input", payload)); err != nil {
+		return nil, err
+	}
+
+	select {
+	case raw := <-answer:
+		if len(raw) == 0 {
+			return nil, nil
+		}
+		var values map[string]any
+		if err := json.Unmarshal(raw, &values); err != nil {
+			return nil, fmt.Errorf("answer to session %s: %w", s.id, err)
+		}
+		return values, nil
+	case <-ctx.Done():
+		// The client went away, or the session was cancelled. Either way nobody is
+		// going to answer, and a handler left waiting here would hold its session open.
+		return nil, ctx.Err()
+	}
+}
+
+// deliver hands answers to the request that asked for them, reporting whether one was
+// waiting.
+func (s *session) deliver(requestID int64, values json.RawMessage) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	ch, ok := s.waiting[requestID]
+	if !ok {
+		return false
+	}
+	select {
+	case ch <- values:
+	default:
+		// Buffered with room for one. A second answer to the same question is a client
+		// bug, not something to block on.
+	}
+	return true
 }
 
 // Notify reports progress. It is a notification rather than a request because a util
