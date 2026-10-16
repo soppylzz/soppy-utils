@@ -6,10 +6,6 @@ source "$spu_root/src/utils/style.sh"
 # spu_go runs the Go executable. It is both the client and, when a client cannot reach
 # one, the core it talks to: one binary, so the two can never be different builds.
 spu_go() {
-  # The binary finds the updater beside itself, which works for an installation. In a
-  # checkout it cannot: go run builds into a temporary directory. The launcher knows the
-  # root it was run from, so it says so.
-  export SPU_ROOT="$spu_root"
   local exe="$spu_root/libexec/spu"
   if [[ "${OSTYPE:-}" == msys* || "${OSTYPE:-}" == cygwin* ]]; then
     exe="$exe.exe"
@@ -34,11 +30,19 @@ spu() {
   # Help and version are the binary's: the list of utils lives in its registry, and a
   # copy of it here is a copy that can be wrong.
   '' | help | -h | --help | --version) spu_go "$@" ;;
+  # Upgrading is the installer's job, not a util's: it replaces the installation this
+  # launcher points at, and that is shell. It lives here rather than in the binary because
+  # the client has nothing to do with it, and because a package manager can take the same
+  # place later without the binary learning about any of them.
+  update)
+    shift
+    bash "$spu_root/scripts/update.sh" "$@"
+    ;;
   # Everything else is the Go binary's to route. A list of utils here would be a second
   # list to keep in step with the registry, and it was already one: __core was unknown to
   # this dispatcher, so the scripts could not ask a running core to stop.
   #
-  # This case has to stay last. It was written before the update case first, which made
+  # This case has to stay last. It was once written before the update case, which made
   # update unreachable — ShellCheck's SC2222, and an upgrade path that silently stopped
   # working.
   *) spu_go "$@" ;;
