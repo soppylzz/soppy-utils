@@ -75,7 +75,9 @@ Nothing generates into `AGENTS.md` or `CLAUDE.md`: those are the project's own f
 
 Do not edit a generated file. Add your own document beside it and say so in `AGENTS.md`; a document you own is never touched. Changing what a generated document says means changing the answer it came from.
 
-`spu-clone-third-party` is installed alongside `spu`. It is an MCP server that hands an agent a local checkout of a third-party package to read, so an agent reads a directory instead of making repeated web requests. A checkout whose major version matches is reused without any network access; an exact version is never fetched on its own, because pulling a pinned version without being told to is how a cache becomes a supply chain.
+Choosing a harness also registers `spu-clone-third-party` with it, in the file that harness reads: `.mcp.json` at the project root for Claude Code, `.pi/mcp.json` for Pi, and `[mcp_servers.clone-third-party]` in `.codex/config.toml` for Codex. Codex's project file is its general configuration rather than one that exists to hold servers, so it is written only when the project has none; otherwise the lines to add are printed. Deselecting a harness removes spu's entry and nothing else. `.agents/mcp/spu.json` records what was registered and with which harnesses.
+
+`spu-clone-third-party` is installed alongside `spu`, on `PATH`, so a registration committed to a repository works on any machine that installed it. It is an MCP server that hands an agent a local checkout of a third-party package to read, so an agent reads a directory instead of making repeated web requests. A checkout whose major version matches is reused without any network access; an exact version is never fetched on its own, because pulling a pinned version without being told to is how a cache becomes a supply chain.
 
 ## Uninstall
 
