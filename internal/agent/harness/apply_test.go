@@ -10,7 +10,7 @@ import (
 
 func base() fstest.MapFS {
 	return fstest.MapFS{
-		"claude/settings.json": {Data: []byte(`{"permissions":{"deny":["Read(~/code/reference/**)"]}}`)},
+		"claude/settings.json": {Data: []byte(`{"permissions":{"deny":["Edit(~/code/reference/**)"]}}`)},
 	}
 }
 

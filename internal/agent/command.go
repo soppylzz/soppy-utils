@@ -98,6 +98,13 @@ func generate(ctx context.Context, project string, reply core.Responder) error {
 	if err != nil {
 		return err
 	}
+	// The index lists what was chosen, so it is built from the choice rather than from an
+	// item: an item cannot describe a list that does not exist until the items are picked.
+	idx, err := indexStep(project, steps)
+	if err != nil {
+		return err
+	}
+	steps = append(steps, idx)
 
 	next, err := Apply(ctx, project, steps, led, reply)
 	if err != nil {
@@ -288,6 +295,12 @@ func status(project string, reply core.Responder) error {
 	}
 
 	for _, recorded := range led.Items {
+		// The index is generated from the selection rather than from an item, so it is
+		// not in the list to be looked up in. Reporting it as an unknown item was a
+		// warning about a file spu wrote itself.
+		if recorded.ID == indexID {
+			continue
+		}
 		it, still := known[recorded.ID]
 		switch {
 		case !still:

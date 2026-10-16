@@ -238,3 +238,95 @@ func TestAProjectWithoutAChosenHarnessGetsNoDirectories(t *testing.T) {
 		t.Errorf("the document was not written: %v", err)
 	}
 }
+
+func TestTheIndexListsWhatWasChosen(t *testing.T) {
+	// The one file a project references from its instruction file. If it does not name a
+	// document, the agent never learns that document exists.
+	project := t.TempDir()
+	reply := &coretest.Recorder{Askable: true, Answers: map[string]any{
+		"items": []any{"conduct-of-go", "conduct-of-commit"}, "harnesses": []any{},
+		"lint-commits": true,
+	}}
+	if err := (Handler{}).Run(context.Background(), core.Command{
+		Util: "agent", Session: core.Session{GOOS: "linux", WorkingDir: project},
+	}, reply); err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+
+	body, err := os.ReadFile(filepath.Join(canonical(project), "SPU.md"))
+	if err != nil {
+		t.Fatalf("no index was written: %v", err)
+	}
+	text := string(body)
+	for _, want := range []string{
+		"@prompts/conduct-of-commit.md",
+		"@prompts/conduct-of-go.md",
+		"This project's agent text is managed by spu",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("the index does not mention %q:\n%s", want, text)
+		}
+	}
+	// An item that was not chosen is not in the index.
+	if strings.Contains(text, "conduct-of-docs") {
+		t.Error("the index names an item that was not chosen")
+	}
+	// The marker is a placeholder, not something the reader should see.
+	if strings.Contains(text, "<!--") {
+		t.Errorf("the placeholder was left in the file:\n%s", text)
+	}
+	// Every path it names is relative to the index, so the `@` resolves.
+	for _, line := range strings.Split(text, "\n") {
+		if !strings.Contains(line, "`@") {
+			continue
+		}
+		p := strings.SplitN(strings.SplitN(line, "`@", 2)[1], "`", 2)[0]
+		if _, err := os.Stat(filepath.Join(canonical(project), filepath.FromSlash(p))); err != nil {
+			t.Errorf("the index points at %q, which is not there: %v", p, err)
+		}
+	}
+}
+
+func TestTheIndexIsNotSomethingToChoose(t *testing.T) {
+	// It is generated from the selection, so offering it in the picker would ask a person
+	// to choose a list of what they are choosing.
+	items, err := content.Items()
+	if err != nil {
+		t.Fatalf("Items: %v", err)
+	}
+	for _, it := range items {
+		if it.ID == "spu-index" {
+			t.Fatal("the index is offered as a choosable item")
+		}
+	}
+}
+
+func TestStatusDoesNotReportTheIndexAsUnknown(t *testing.T) {
+	// The index is written by the generator, not by an item, so it is not in the list of
+	// items to look up. Reporting it as one spu does not know is a warning about a file
+	// spu wrote itself, which teaches the reader to ignore the warnings.
+	project := t.TempDir()
+	reply := &coretest.Recorder{Askable: true, Answers: map[string]any{
+		"items": []any{"conduct-of-go"}, "harnesses": []any{},
+	}}
+	if err := (Handler{}).Run(context.Background(), core.Command{
+		Util: "agent", Session: core.Session{GOOS: "linux", WorkingDir: project},
+	}, reply); err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+
+	report := &coretest.Recorder{Askable: true}
+	if err := (Handler{}).Run(context.Background(), core.Command{
+		Util: "agent", Args: []string{"status"},
+		Session: core.Session{GOOS: "linux", WorkingDir: project},
+	}, report); err != nil {
+		t.Fatalf("status: %v", err)
+	}
+	said := strings.Join(report.Notices, "\n")
+	if strings.Contains(said, "does not know") {
+		t.Errorf("status reported a file spu wrote as unknown:\n%s", said)
+	}
+	if strings.TrimSpace(said) != "" {
+		t.Errorf("status reported something about a healthy project:\n%s", said)
+	}
+}
