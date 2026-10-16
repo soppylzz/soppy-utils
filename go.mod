@@ -4,6 +4,7 @@ go 1.24.2
 
 require (
 	charm.land/huh/v2 v2.0.0
+	github.com/BurntSushi/toml v1.6.0
 	github.com/charmbracelet/x/term v0.2.2
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3
 )

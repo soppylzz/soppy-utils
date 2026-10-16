@@ -2,6 +2,8 @@ package harness
 
 import (
 	"encoding/json"
+
+	"github.com/BurntSushi/toml"
 	"os"
 	"path/filepath"
 	"strings"
@@ -125,17 +127,22 @@ func TestCodexRegistrationIsTOML(t *testing.T) {
 	}
 }
 
-func TestCodexConfigThatAlreadyExistsIsNotEdited(t *testing.T) {
-	// .codex/config.toml is the project's general configuration — sandbox, hooks, model —
-	// not a file that exists to hold servers. Editing TOML correctly needs a parser, and
-	// appending to somebody's config without one is how it gets corrupted. So the file is
-	// left alone and the lines to add are reported instead.
+func TestCodexRegistrationMergesIntoAnExistingConfig(t *testing.T) {
+	// .codex/config.toml is the project's own configuration, and the entry is added to it
+	// rather than the file being rewritten. A rewrite would drop the comments and the
+	// ordering somebody put there for their own reasons.
 	project := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(project, ".codex"), 0o755); err != nil {
 		t.Fatalf("setup: %v", err)
 	}
-	original := "sandbox_mode = \"read-only\"\n"
-	if err := os.WriteFile(filepath.Join(project, ".codex", "config.toml"), []byte(original), 0o644); err != nil {
+	original := `# Kept for the sandbox review, see the ticket.
+sandbox_mode = "workspace-write"
+
+[projects."/somewhere"]
+trust_level = "trusted"
+`
+	path := filepath.Join(project, ".codex", "config.toml")
+	if err := os.WriteFile(path, []byte(original), 0o644); err != nil {
 		t.Fatalf("setup: %v", err)
 	}
 
@@ -143,13 +150,119 @@ func TestCodexConfigThatAlreadyExistsIsNotEdited(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RegisterMCP: %v", err)
 	}
-	body, _ := os.ReadFile(filepath.Join(project, ".codex", "config.toml"))
-	if string(body) != original {
-		t.Errorf("the project's own config was edited:\n%s", body)
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
 	}
-	joined := strings.Join(done, "\n")
-	if !strings.Contains(joined, "[mcp_servers.clone-third-party]") {
-		t.Errorf("what to add was not reported:\n%s", joined)
+	text := string(body)
+
+	// Everything that was there is still there, byte for byte.
+	if !strings.Contains(text, original) {
+		t.Errorf("the project's own config was not preserved:\n%s", text)
+	}
+	if !strings.Contains(text, "[mcp_servers.clone-third-party]") {
+		t.Errorf("the server was not added:\n%s", text)
+	}
+	if !strings.Contains(text, `command = "spu-clone-third-party"`) {
+		t.Errorf("the command is missing:\n%s", text)
+	}
+	if !contains(done, "registered clone-third-party for codex") {
+		t.Errorf("the registration was not reported: %v", done)
+	}
+
+	// And the result is still TOML that Codex can read.
+	var parsed map[string]any
+	if _, err := toml.Decode(text, &parsed); err != nil {
+		t.Fatalf("the file we wrote is not valid TOML: %v\n%s", err, text)
+	}
+	servers, _ := parsed["mcp_servers"].(map[string]any)
+	if _, ok := servers["clone-third-party"]; !ok {
+		t.Errorf("the table did not end up under mcp_servers: %v", parsed)
+	}
+	if parsed["sandbox_mode"] != "workspace-write" {
+		t.Errorf("an existing key was lost: %v", parsed)
+	}
+}
+
+func TestCodexConfigThatIsNotValidTOMLIsRefused(t *testing.T) {
+	// Somebody's file, half-written or broken. Adding to it would make it worse, and
+	// rewriting it would discard whatever they meant.
+	project := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(project, ".codex"), 0o755); err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+	original := "sandbox_mode = [unclosed\n"
+	path := filepath.Join(project, ".codex", "config.toml")
+	if err := os.WriteFile(path, []byte(original), 0o644); err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+
+	_, err := RegisterMCP(project, []string{"codex"}, servers())
+	if err == nil {
+		t.Fatal("a broken config was written to")
+	}
+	if !strings.Contains(err.Error(), "config.toml") {
+		t.Errorf("error %q does not name the file", err)
+	}
+	body, _ := os.ReadFile(path)
+	if string(body) != original {
+		t.Errorf("the file was changed: %q", body)
+	}
+}
+
+func TestCodexRegistrationRemovesItsTableWhenDeselected(t *testing.T) {
+	project := t.TempDir()
+	path := filepath.Join(project, ".codex", "config.toml")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+	kept := "sandbox_mode = \"read-only\"\n"
+	if err := os.WriteFile(path, []byte(kept), 0o644); err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+	if _, err := RegisterMCP(project, []string{"codex"}, servers()); err != nil {
+		t.Fatalf("register: %v", err)
+	}
+
+	removed, err := UnregisterMCP(project, []string{"codex"}, servers())
+	if err != nil {
+		t.Fatalf("UnregisterMCP: %v", err)
+	}
+	body, _ := os.ReadFile(path)
+	if strings.Contains(string(body), "mcp_servers") {
+		t.Errorf("our table was left behind:\n%s", body)
+	}
+	if !strings.Contains(string(body), `sandbox_mode = "read-only"`) {
+		t.Errorf("the project's own setting was removed too:\n%s", body)
+	}
+	if len(removed) == 0 {
+		t.Error("the removal was not reported")
+	}
+}
+
+func TestCodexRegistrationLeavesAHandEditAlone(t *testing.T) {
+	// The table is there with different values: somebody changed it on purpose, or this
+	// build would write something else. Either way it is not ours to overwrite.
+	project := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(project, ".codex"), 0o755); err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+	original := "[mcp_servers.clone-third-party]\ncommand = \"/somewhere/else\"\n"
+	path := filepath.Join(project, ".codex", "config.toml")
+	if err := os.WriteFile(path, []byte(original), 0o644); err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+
+	done, err := RegisterMCP(project, []string{"codex"}, servers())
+	if err != nil {
+		t.Fatalf("RegisterMCP: %v", err)
+	}
+	body, _ := os.ReadFile(path)
+	if string(body) != original {
+		t.Errorf("a table somebody set was overwritten:\n%s", body)
+	}
+	if !strings.Contains(strings.Join(done, "\n"), "different values") {
+		t.Errorf("nothing said the table was already there with other values: %v", done)
 	}
 }
 

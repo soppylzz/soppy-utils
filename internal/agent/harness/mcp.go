@@ -2,7 +2,9 @@ package harness
 
 import (
 	"encoding/json"
+
 	"fmt"
+	"github.com/BurntSushi/toml"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -85,13 +87,14 @@ func RegisterMCP(project string, harnesses []string, servers []Server) ([]string
 func UnregisterMCP(project string, harnesses []string, servers []Server) ([]string, error) {
 	var done []string
 	for _, target := range mcpTargets(project, harnesses) {
-		if target.toml {
-			// The same reason the write is refused: removing a table from somebody's
-			// config without a parser has the same problem as adding one.
-			continue
-		}
 		for _, s := range servers {
-			what, err := unregisterJSON(target.path, s)
+			var what string
+			var err error
+			if target.toml {
+				what, err = unregisterTOML(target.path, s)
+			} else {
+				what, err = unregisterJSON(target.path, s)
+			}
 			if err != nil {
 				return done, err
 			}
@@ -160,43 +163,184 @@ func unregisterJSON(path string, s Server) (string, error) {
 	return "removed " + s.Name + " from " + path, nil
 }
 
-// registerTOML writes a Codex registration, and only into a file that is not there.
+// registerTOML adds a table to a Codex registration file.
 //
 // `.codex/config.toml` is a project's general configuration — sandbox, hooks, model,
-// reasoning — rather than a file that exists to hold servers the way .mcp.json does.
-// Editing TOML correctly needs a parser this project does not depend on, and appending a
-// table to somebody's config without one is how a config gets corrupted. So a file that
-// exists is left exactly as it is and the lines to add are reported instead.
+// reasoning — so it is somebody's file with their own comments and ordering in it. The
+// entry is therefore appended to the text rather than merged by re-encoding: decoding into
+// a map and encoding it back would produce a valid file that had lost everything the
+// person put there for their own reasons.
+//
+// That makes the parser a way to prove the result is still valid rather than a way to
+// produce it. Nothing is written until the parser has read the file and then read the
+// result, so a file that was already broken is left alone and a file this would break is
+// never written.
 func registerTOML(harness, path string, s Server) (string, error) {
-	if body, err := os.ReadFile(path); err == nil {
-		if strings.Contains(string(body), "[mcp_servers."+s.Name+"]") {
-			return "", nil
+	body, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			return "", err
 		}
-		return "add this to " + path + " by hand:\n" + tomlTable(s), nil
-	} else if !os.IsNotExist(err) {
+		if err := os.WriteFile(path, []byte(tomlTable(s)), 0o644); err != nil {
+			return "", err
+		}
+		return "registered " + s.Name + " for " + harness, nil
+	}
+	if err != nil {
 		return "", err
 	}
 
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return "", err
+	var parsed map[string]any
+	if _, err := toml.Decode(string(body), &parsed); err != nil {
+		return "", fmt.Errorf("%s is not valid TOML, so it was left alone: %w", path, err)
 	}
-	if err := os.WriteFile(path, []byte(tomlTable(s)), 0o644); err != nil {
+
+	if entry, ok := tomlEntry(parsed, s.Name); ok {
+		if equalEntry(entry, s) {
+			return "", nil
+		}
+		return "\n[mcp_servers." + s.Name + "] is already in " + path + " with different " +
+			"values; change it by hand if it should point at " + s.Command, nil
+	}
+
+	next := appendTable(string(body), s)
+	if _, err := toml.Decode(next, &parsed); err != nil {
+		return "", fmt.Errorf("adding [mcp_servers.%s] would leave %s invalid (%w), so it "+
+			"was left alone", s.Name, path, err)
+	}
+	if err := os.WriteFile(path, []byte(next), 0o644); err != nil {
 		return "", err
 	}
 	return "registered " + s.Name + " for " + harness, nil
 }
 
+// unregisterTOML takes our table back out, and nothing else.
+//
+// The table is cut out as text, for the same reason it is appended as text, and the
+// result is parsed before it is written.
+func unregisterTOML(path string, s Server) (string, error) {
+	body, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", nil
+		}
+		return "", err
+	}
+
+	next, removed := removeTable(string(body), s.Name)
+	if !removed {
+		return "", nil
+	}
+	var parsed map[string]any
+	if _, err := toml.Decode(next, &parsed); err != nil {
+		return "", fmt.Errorf("removing [mcp_servers.%s] would leave %s invalid (%w), so it "+
+			"was left alone", s.Name, path, err)
+	}
+	if err := os.WriteFile(path, []byte(next), 0o644); err != nil {
+		return "", err
+	}
+	return "removed " + s.Name + " from " + path, nil
+}
+
+// tomlEntry finds a registered server in a parsed file.
+func tomlEntry(parsed map[string]any, name string) (map[string]any, bool) {
+	named, ok := parsed["mcp_servers"].(map[string]any)
+	if !ok {
+		return nil, false
+	}
+	entry, ok := named[name].(map[string]any)
+	return entry, ok
+}
+
+func equalEntry(entry map[string]any, s Server) bool {
+	if command, _ := entry["command"].(string); command != s.Command {
+		return false
+	}
+	return reflect.DeepEqual(stringList(entry["args"]), s.Args)
+}
+
+func stringList(v any) []string {
+	switch got := v.(type) {
+	case nil:
+		return nil
+	case []string:
+		return got
+	case []any:
+		out := make([]string, 0, len(got))
+		for _, item := range got {
+			text, ok := item.(string)
+			if !ok {
+				return nil
+			}
+			out = append(out, text)
+		}
+		return out
+	default:
+		return nil
+	}
+}
+
+// appendTable adds the table at the end, separated from whatever is above it.
+func appendTable(body string, s Server) string {
+	if strings.TrimSpace(body) == "" {
+		return tomlTable(s)
+	}
+	if !strings.HasSuffix(body, "\n") {
+		body += "\n"
+	}
+	return body + "\n" + tomlTable(s)
+}
+
+// removeTable cuts a table and its body out of a TOML document.
+//
+// A table runs from its header to the next header, so that is the span removed. Whatever
+// separated it from its neighbours is tidied back to a single blank line, because the
+// blank lines around an appended table were put there by the append.
+func removeTable(body, name string) (string, bool) {
+	header := tomlHeader(name)
+	lines := strings.Split(body, "\n")
+
+	start := -1
+	for i, line := range lines {
+		if strings.TrimSpace(line) == header {
+			start = i
+			break
+		}
+	}
+	if start < 0 {
+		return body, false
+	}
+
+	end := len(lines)
+	for i := start + 1; i < len(lines); i++ {
+		if strings.HasPrefix(strings.TrimSpace(lines[i]), "[") {
+			end = i
+			break
+		}
+	}
+
+	out := append(append([]string{}, lines[:start]...), lines[end:]...)
+	joined := strings.Join(out, "\n")
+	for strings.Contains(joined, "\n\n\n") {
+		joined = strings.ReplaceAll(joined, "\n\n\n", "\n\n")
+	}
+	return joined, true
+}
+
+func tomlHeader(name string) string {
+	return "[mcp_servers." + name + "]"
+}
+
 func tomlTable(s Server) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "[mcp_servers.%s]\n", s.Name)
-	fmt.Fprintf(&b, "command = %q\n", s.Command)
+	fmt.Fprintln(&b, tomlHeader(s.Name))
+	entry := map[string]any{"command": s.Command}
 	if len(s.Args) > 0 {
-		quoted := make([]string, 0, len(s.Args))
-		for _, a := range s.Args {
-			quoted = append(quoted, fmt.Sprintf("%q", a))
-		}
-		fmt.Fprintf(&b, "args = [%s]\n", strings.Join(quoted, ", "))
+		entry["args"] = s.Args
 	}
+	// Encoded rather than formatted by hand so that a value needing quotes or escapes
+	// gets them.
+	_ = toml.NewEncoder(&b).Encode(entry)
 	return b.String()
 }
 
