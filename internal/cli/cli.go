@@ -78,9 +78,7 @@ func run(args []string, version string) (int, error) {
 
 	switch args[0] {
 	case "__core":
-		// The daemon role, started by a client that could not reach one.
-		welcome.Version = version
-		return 0, serve(home, version)
+		return coreCommand(home, version, args[1:])
 
 	case "config-status":
 		return 0, configStatus(home)
@@ -104,11 +102,57 @@ func known(id string) bool {
 	return false
 }
 
-func serve(home, version string) error {
+// coreCommand is the daemon role, and the way to ask a running one to stop.
+//
+// Stopping is its own mode rather than something a client run does, because the callers
+// that need it are the scripts about to replace or delete the installation. Going
+// through a client run would start a daemon in order to stop one, which is the wrong
+// direction and, during an upgrade, the wrong binary.
+func coreCommand(home, version string, args []string) (int, error) {
+	if len(args) == 0 {
+		return 1, errors.New("__core needs a mode: serve or shutdown")
+	}
+
 	ep, err := transport.Resolve(runtime.GOOS, home, os.Getenv("SPU_CORE_ENDPOINT"))
 	if err != nil {
-		return err
+		return 1, err
 	}
+
+	switch args[0] {
+	case "serve":
+		return 0, serve(home, version, ep)
+	case "shutdown":
+		return 0, cored.Shutdown(context.Background(), ep, shutdownBudget)
+	}
+	return 1, fmt.Errorf("unknown core mode %q", args[0])
+}
+
+// idleTimeout is how long a daemon stays resident with nobody connected.
+//
+// Overridable because the test suite starts one per spec and cannot wait fifteen minutes
+// for each to leave. An unusable value falls back rather than being an error: a daemon
+// that refuses to start over a malformed environment variable is worse than one that
+// lives longer than asked.
+func idleTimeout() time.Duration {
+	const fallback = 15 * time.Minute
+	raw := os.Getenv("SPU_CORE_IDLE_TIMEOUT")
+	if raw == "" {
+		return fallback
+	}
+	parsed, err := time.ParseDuration(raw)
+	if err != nil || parsed <= 0 {
+		return fallback
+	}
+	return parsed
+}
+
+// shutdownBudget is how long the scripts wait for a daemon to finish. It has to outlast
+// the drain grace the daemon was started with, or a shutdown with a session in flight
+// would report failure while it was still doing the right thing.
+const shutdownBudget = 10 * time.Second
+
+func serve(home, version string, ep transport.Endpoint) error {
+	welcome.Version = version
 
 	r := registry.New()
 	for _, u := range utils {
@@ -122,7 +166,7 @@ func serve(home, version string) error {
 		Registry:    r,
 		Version:     version,
 		Handler:     dispatch{},
-		IdleTimeout: 15 * time.Minute,
+		IdleTimeout: idleTimeout(),
 		DrainGrace:  5 * time.Second,
 		Log:         logFile(home),
 	})
@@ -150,7 +194,7 @@ func runThroughCore(home string, args []string) (int, error) {
 	ctx := context.Background()
 	conn, err := cored.Connect(ctx, cored.AttachOptions{
 		Endpoint: ep,
-		Spawn:    []string{self, "__core"},
+		Spawn:    []string{self, "__core", "serve"},
 		LogPath:  filepath.Join(home, ".config", "soppy-utils", "core.log"),
 		Budget:   5 * time.Second,
 		Kind:     "tui",

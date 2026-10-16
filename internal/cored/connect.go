@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"os"
 	"runtime"
 	"time"
 
@@ -75,7 +76,8 @@ func Connect(ctx context.Context, opts AttachOptions) (*Conn, error) {
 		return nil, err
 	}
 
-	if err := stopCore(conn, r, w, opts.Endpoint, opts.Budget/2); err != nil {
+	conn.Close()
+	if err := Shutdown(ctx, opts.Endpoint, opts.Budget/2); err != nil {
 		return nil, fmt.Errorf("stop the out-of-date core: %w", err)
 	}
 
@@ -134,17 +136,30 @@ func handshake(r *protocol.Reader, w *protocol.Writer, opts AttachOptions) (Hand
 	return Handshake{ProtocolVersion: out.ProtocolVersion, Version: out.Core.Version}, nil
 }
 
-// stopCore asks a core to stop and waits for the endpoint to go quiet.
+// Shutdown asks a running core to stop and waits for the endpoint to go quiet.
 //
-// The reply is read before the connection closes. The daemon writes its answer first
-// and drains afterwards, so dropping the connection immediately would skip the drain
-// and abandon any session that was still running.
-func stopCore(conn net.Conn, r *protocol.Reader, w *protocol.Writer, ep transport.Endpoint, budget time.Duration) error {
+// It is the step spu update needs before it replaces the binary, and spu uninstall needs
+// before it removes the directory. On Windows a running executable cannot be replaced;
+// everywhere, a daemon left behind is a process holding files that no longer exist.
+//
+// A core that is not running is not an error. There is nothing to stop, which is the
+// state the caller was asking for.
+func Shutdown(ctx context.Context, ep transport.Endpoint, budget time.Duration) error {
 	if budget <= 0 {
 		budget = 2 * time.Second
 	}
 
+	conn, err := transport.Dial(ep)
+	if err != nil {
+		return nil // nothing is listening
+	}
+
+	r := protocol.NewReader(conn)
+	w := protocol.NewWriter(conn)
 	if err := w.WriteMessage(protocol.NewRequest(1, "server/shutdown", json.RawMessage(`{}`))); err == nil {
+		// The reply is read before the connection closes. The daemon writes its answer
+		// first and drains afterwards, so dropping the connection immediately would skip
+		// the drain and abandon a session that was still running.
 		_ = conn.SetReadDeadline(time.Now().Add(budget))
 		_, _ = r.Read()
 	}
@@ -152,11 +167,16 @@ func stopCore(conn net.Conn, r *protocol.Reader, w *protocol.Writer, ep transpor
 
 	deadline := time.Now().Add(budget)
 	for time.Now().Before(deadline) {
-		probe, err := transport.Dial(ep)
-		if err != nil {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		// The socket file going away is what says the daemon has finished rather than
+		// merely stopped accepting. It leaves the file in place while it drains, so a
+		// caller that replaced the binary when the connection was refused would be
+		// replacing it underneath a process still running it.
+		if _, err := os.Stat(ep.Address); err != nil {
 			return nil
 		}
-		probe.Close()
 		time.Sleep(pollInterval)
 	}
 	return fmt.Errorf("core did not stop within %s", budget)

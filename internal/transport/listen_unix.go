@@ -89,3 +89,11 @@ func Dial(ep Endpoint) (net.Conn, error) {
 }
 
 func dialUnix(path string) (net.Conn, error) { return net.Dial("unix", path) }
+
+// SetUnlinkOnClose decides whether closing the listener takes the socket file with it.
+//
+// The default is yes, which is right for a listener that is finished. A daemon that
+// stops accepting while it is still draining sets it to no: a caller waiting for the
+// daemon to be gone has to be able to tell "stopped accepting" from "finished", and the
+// file disappearing is what says the second.
+func (l *Listener) SetUnlinkOnClose(unlink bool) { l.ln.SetUnlinkOnClose(unlink) }

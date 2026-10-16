@@ -185,3 +185,22 @@ func TestListenRejectsANonUnixEndpoint(t *testing.T) {
 		t.Fatal("Listen accepted a pipe endpoint on a unix build, want error")
 	}
 }
+
+func TestAListenerCanLeaveItsSocketBehind(t *testing.T) {
+	// A daemon that has stopped accepting but is still finishing its work needs the file
+	// to stay, so that a caller can tell the two apart.
+	ep := tempEndpoint(t)
+
+	l, err := Listen(ep)
+	if err != nil {
+		t.Fatalf("Listen: %v", err)
+	}
+	l.SetUnlinkOnClose(false)
+	if err := l.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	if _, err := os.Stat(ep.Address); err != nil {
+		t.Errorf("the socket file was removed although the listener was told to leave it: %v", err)
+	}
+}

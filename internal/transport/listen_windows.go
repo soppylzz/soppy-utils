@@ -40,3 +40,10 @@ func (l *Listener) Addr() string { return "" }
 func errNotImplemented() error {
 	return fmt.Errorf("transport: named pipes are not implemented on this platform yet")
 }
+
+// SetUnlinkOnClose decides whether closing the listener takes its endpoint with it.
+//
+// It exists so that this build exposes the same API as the other one. A platform that
+// changes an exported signature forces every caller to grow a build tag, which is the
+// coupling this package exists to prevent.
+func (l *Listener) SetUnlinkOnClose(bool) {}

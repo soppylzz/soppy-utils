@@ -2,6 +2,7 @@ package cli
 
 import (
 	"testing"
+	"time"
 
 	"github.com/soppylzz/soppy-utils/internal/registry"
 )
@@ -57,5 +58,43 @@ func TestMissingCommandIsReported(t *testing.T) {
 func TestAnUnknownCommandIsReportedByName(t *testing.T) {
 	if _, err := run([]string{"nonesuch"}, "test"); err == nil {
 		t.Fatal("run accepted an unknown command, want an error")
+	}
+}
+
+func TestTheCoreModeNeedsToSayWhichMode(t *testing.T) {
+	if _, err := coreCommand(t.TempDir(), "test", nil); err == nil {
+		t.Fatal("__core with no mode was accepted, want an error")
+	}
+}
+
+func TestAnUnknownCoreModeIsReported(t *testing.T) {
+	if _, err := coreCommand(t.TempDir(), "test", []string{"nonesuch"}); err == nil {
+		t.Fatal("an unknown __core mode was accepted, want an error")
+	}
+}
+
+func TestTheIdleTimeoutDefaultsToFifteenMinutes(t *testing.T) {
+	t.Setenv("SPU_CORE_IDLE_TIMEOUT", "")
+	if got := idleTimeout(); got != 15*time.Minute {
+		t.Errorf("idle timeout = %s, want 15m", got)
+	}
+}
+
+func TestTheIdleTimeoutIsOverridable(t *testing.T) {
+	// The test suite starts a daemon per spec and cannot wait fifteen minutes for each.
+	t.Setenv("SPU_CORE_IDLE_TIMEOUT", "2s")
+	if got := idleTimeout(); got != 2*time.Second {
+		t.Errorf("idle timeout = %s, want 2s", got)
+	}
+}
+
+func TestAnUnusableIdleTimeoutFallsBack(t *testing.T) {
+	// A daemon that refused to start over a malformed variable would be worse than one
+	// that lives longer than asked.
+	for _, raw := range []string{"nonsense", "-1s", "0"} {
+		t.Setenv("SPU_CORE_IDLE_TIMEOUT", raw)
+		if got := idleTimeout(); got != 15*time.Minute {
+			t.Errorf("idle timeout for %q = %s, want the default", raw, got)
+		}
 	}
 }

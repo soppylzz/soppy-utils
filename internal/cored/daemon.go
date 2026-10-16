@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -59,6 +60,10 @@ type Daemon struct {
 	draining  chan struct{}
 	drainOnce sync.Once
 
+	// bound is the socket file this daemon created, so its exit can tell its own from a
+	// replacement's.
+	bound os.FileInfo
+
 	mu        sync.Mutex
 	conns     map[*clientConn]struct{}
 	idleSince time.Time
@@ -80,13 +85,34 @@ func New(opts Options) (*Daemon, error) {
 	if log == nil {
 		log = io.Discard
 	}
-	return &Daemon{
+	d := &Daemon{
 		opts:     opts,
 		ln:       ln,
 		log:      log,
 		draining: make(chan struct{}),
 		conns:    make(map[*clientConn]struct{}),
-	}, nil
+	}
+	if info, err := os.Stat(opts.Endpoint.Address); err == nil {
+		d.bound = info
+	}
+	return d, nil
+}
+
+// removeSocket takes the socket file away, but only if it is still the one this daemon
+// bound.
+//
+// A client that arrived while this daemon was draining started a replacement. Removing
+// the replacement's socket on the way out would leave it unreachable, and the next
+// client would start a third.
+func (d *Daemon) removeSocket() {
+	if d.bound == nil {
+		return
+	}
+	current, err := os.Stat(d.opts.Endpoint.Address)
+	if err != nil || !os.SameFile(d.bound, current) {
+		return
+	}
+	os.Remove(d.opts.Endpoint.Address)
 }
 
 // requestDrain asks Serve to stop. It is safe to call from more than one connection
@@ -103,6 +129,12 @@ func (d *Daemon) requestDrain() {
 // through writing configuration, and stopping it there would leave the user with a
 // half-applied change and nobody to tell them.
 func (d *Daemon) drain() {
+	// Stop accepting, but leave the socket file where it is. A caller waiting for this
+	// daemon to be gone has to be able to tell "stopped accepting" from "finished", and
+	// the file disappearing is what says the second. Removing it here would report a
+	// daemon as gone while it was still draining, which is the moment spu update would
+	// replace the binary underneath it.
+	d.ln.SetUnlinkOnClose(false)
 	d.ln.Close()
 
 	d.mu.Lock()
@@ -166,6 +198,7 @@ func (d *Daemon) Serve(ctx context.Context) error {
 		cancel()     // tell the connection handlers to stop
 		d.ln.Close() // unblock Accept, which is how the accept goroutine learns
 		d.wg.Wait()  // let them finish before this returns
+		d.removeSocket()
 	}()
 
 	d.mu.Lock()
