@@ -19,6 +19,7 @@ import (
 
 	"github.com/charmbracelet/x/term"
 
+	"github.com/soppylzz/soppy-utils/internal/agent"
 	"github.com/soppylzz/soppy-utils/internal/client"
 	"github.com/soppylzz/soppy-utils/internal/clioutput"
 	"github.com/soppylzz/soppy-utils/internal/configstore"
@@ -49,6 +50,7 @@ var utils = []struct {
 	{id: "welcome", register: welcome.Register, handler: welcome.Handler{}},
 	{id: "license", register: license.Register, handler: license.Handler{}},
 	{id: "git", register: gitconfig.Register, handler: gitconfig.Handler{}},
+	{id: "agent", register: agent.Register, handler: agent.Handler{}},
 	{id: "vscode", register: vscode.Register, handler: vscode.Handler{}},
 }
 
@@ -230,17 +232,7 @@ func runThroughCore(home string, args []string) (int, error) {
 			Confirm:         interactive,
 			Interactive:     interactive,
 		},
-		Env: cored.Env{
-			GOOS: runtime.GOOS,
-			// The shell that will run the banner is the one the user is in, which is what
-			// the generated hook has to be written for.
-			Shell:      filepath.Base(os.Getenv("SHELL")),
-			Path:       os.Getenv("PATH"),
-			Home:       os.Getenv("HOME"),
-			HomeNative: os.Getenv("SPU_HOME_NATIVE"),
-			Tmux:       os.Getenv("TMUX"),
-			AppData:    os.Getenv("APPDATA"),
-		},
+		Env: envFor(),
 	})
 	if err != nil {
 		return 1, err
@@ -250,6 +242,32 @@ func runThroughCore(home string, args []string) (int, error) {
 	c := client.New(conn, os.Stdin, os.Stdout, os.Stderr)
 	c.Interactive = interactive
 	return c.Run(ctx, args[0], args[1:])
+}
+
+// envFor is what this client reports about the machine it is running on.
+//
+// It is built here rather than in the daemon because every field is a fact about the
+// client's shell: the daemon outlives whoever started it, so its own environment is an
+// answer about a different process, and it never learns that it was wrong.
+//
+// The working directory is read rather than refused when it cannot be: a command that
+// needs a project asks for one and says so, and the rest do not care.
+func envFor() cored.Env {
+	workdir, _ := os.Getwd()
+	return cored.Env{
+		GOOS: runtime.GOOS,
+		// The shell that will run the banner is the one the user is in, which is what
+		// the generated hook has to be written for.
+		Shell:      filepath.Base(os.Getenv("SHELL")),
+		Path:       os.Getenv("PATH"),
+		Home:       os.Getenv("HOME"),
+		HomeNative: os.Getenv("SPU_HOME_NATIVE"),
+		Tmux:       os.Getenv("TMUX"),
+		AppData:    os.Getenv("APPDATA"),
+
+		WorkingDir:       workdir,
+		WorkingDirNative: os.Getenv("SPU_WORKDIR_NATIVE"),
+	}
 }
 
 // dispatch routes a command to the util that implements it.

@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -96,5 +97,35 @@ func TestAnUnusableIdleTimeoutFallsBack(t *testing.T) {
 		if got := idleTimeout(); got != 15*time.Minute {
 			t.Errorf("idle timeout for %q = %s, want the default", raw, got)
 		}
+	}
+}
+
+// The daemon outlives the client, so anything the client knows about where it was run has
+// to be sent rather than looked up later. This is the wiring that does it: a command that
+// generates files into a project is given the directory the user was standing in, and on
+// Windows the spelling the native daemon can open.
+func TestTheClientReportsTheDirectoryItWasRunFrom(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	t.Setenv("SPU_WORKDIR_NATIVE", `C:\Users\someone\project`)
+
+	env := envFor()
+
+	got, err := filepath.EvalSymlinks(env.WorkingDir)
+	if err != nil {
+		t.Fatalf("EvalSymlinks(%q): %v", env.WorkingDir, err)
+	}
+	want, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		t.Fatalf("EvalSymlinks(%q): %v", dir, err)
+	}
+	if got != want {
+		t.Errorf("WorkingDir = %q, want the directory the client was run from (%q)", env.WorkingDir, dir)
+	}
+	if env.WorkingDirNative != `C:\Users\someone\project` {
+		t.Errorf("WorkingDirNative = %q, want the value the launcher exported", env.WorkingDirNative)
+	}
+	if got := env.WorkingDirForFilesystem(); got != `C:\Users\someone\project` {
+		t.Errorf("WorkingDirForFilesystem = %q, want the native spelling when there is one", got)
 	}
 }

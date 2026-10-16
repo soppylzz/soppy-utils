@@ -1,0 +1,18 @@
+{
+  "id": "conduct-of-comment",
+  "version": 1,
+  "title": "Comment conventions",
+  "policy": "reuse",
+  "on_modified": "overwrite",
+  "outputs": [
+    {
+      "root": "agents",
+      "path": "prompts/conduct-of-comment.md",
+      "content": [
+        {
+          "file": "comment/header.md"
+        }
+      ]
+    }
+  ]
+}

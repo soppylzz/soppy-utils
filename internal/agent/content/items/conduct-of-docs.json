@@ -1,0 +1,18 @@
+{
+  "id": "conduct-of-docs",
+  "version": 1,
+  "title": "Documentation conventions",
+  "policy": "reuse",
+  "on_modified": "overwrite",
+  "outputs": [
+    {
+      "root": "agents",
+      "path": "prompts/conduct-of-docs.md",
+      "content": [
+        {
+          "file": "docs/header.md"
+        }
+      ]
+    }
+  ]
+}

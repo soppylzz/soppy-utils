@@ -1,0 +1,18 @@
+{
+  "id": "conduct-of-shell",
+  "version": 1,
+  "title": "Shell conventions",
+  "policy": "reuse",
+  "on_modified": "overwrite",
+  "outputs": [
+    {
+      "root": "agents",
+      "path": "prompts/conduct-of-shell.md",
+      "content": [
+        {
+          "file": "lang/shell.md"
+        }
+      ]
+    }
+  ]
+}

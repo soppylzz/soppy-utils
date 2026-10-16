@@ -1,0 +1,240 @@
+package agent
+
+import (
+	"context"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/soppylzz/soppy-utils/internal/agent/content"
+	"github.com/soppylzz/soppy-utils/internal/agent/ledger"
+	"github.com/soppylzz/soppy-utils/internal/core"
+	"github.com/soppylzz/soppy-utils/internal/core/coretest"
+)
+
+func readLedger(project string) (ledger.Ledger, error) {
+	return ledger.Read(canonical(project))
+}
+
+func TestAScriptedRunIsRefusedRatherThanGuessed(t *testing.T) {
+	// Nobody chose anything, so there is no right set to generate. Writing a default one
+	// would put files in a project because a script ran.
+	project := t.TempDir()
+	reply := &coretest.Recorder{} // cannot ask
+
+	err := Handler{}.Run(context.Background(), core.Command{
+		Util: "agent", Session: core.Session{GOOS: "linux", WorkingDir: project},
+	}, reply)
+	if err == nil {
+		t.Fatal("a run with nobody to ask generated a default set")
+	}
+	if !strings.Contains(err.Error(), "terminal") {
+		t.Errorf("error %q does not say what to do about it", err)
+	}
+	if _, statErr := os.Stat(canonical(project)); statErr == nil {
+		t.Error("the refusal still created the project directory")
+	}
+}
+
+func TestTheWholeThingGeneratesAndThenLeavesItAlone(t *testing.T) {
+	// The end-to-end shape: choose, answer, write, record — then run again and change
+	// nothing, which is what a command that is run repeatedly has to do.
+	project := t.TempDir()
+	items, err := content.Items()
+	if err != nil {
+		t.Fatalf("Items: %v", err)
+	}
+	pick := []string{"conduct-of-commit", "soppy-excalidraw"}
+	if len(items) == 0 {
+		t.Fatal("no items")
+	}
+
+	reply := &coretest.Recorder{Askable: true, Answers: map[string]any{
+		"items":        []any{pick[0], pick[1]},
+		"lint-commits": true,
+	}}
+	if err := (Handler{}).Run(context.Background(), core.Command{
+		Util: "agent", Session: core.Session{GOOS: "linux", WorkingDir: project},
+	}, reply); err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+
+	prompt := filepath.Join(canonical(project), "prompts", "conduct-of-commit.md")
+	body, err := os.ReadFile(prompt)
+	if err != nil {
+		t.Fatalf("the document was not written: %v", err)
+	}
+	if !strings.Contains(string(body), "Conventional Commits") {
+		t.Errorf("the document does not hold the shipped text:\n%s", body)
+	}
+	if !strings.Contains(string(body), "commitlint") {
+		t.Error("the segment gated on lint-commits was not written although it was answered yes")
+	}
+	skill := filepath.Join(canonical(project), "skills", "soppy-excalidraw", "SKILL.md")
+	if _, err := os.Stat(skill); err != nil {
+		t.Errorf("the skill was not written: %v", err)
+	}
+	// Only what was chosen.
+	if _, err := os.Stat(filepath.Join(canonical(project), "prompts", "conduct-of-go.md")); err == nil {
+		t.Error("an item that was not chosen was generated anyway")
+	}
+
+	led, err := readLedger(project)
+	if err != nil {
+		t.Fatalf("readLedger: %v", err)
+	}
+	if _, ok := led.Find("conduct-of-commit"); !ok {
+		t.Error("the item was not recorded, so the next run cannot tell the file is ours")
+	}
+
+	before, err := os.Stat(prompt)
+	if err != nil {
+		t.Fatalf("Stat: %v", err)
+	}
+	second := &coretest.Recorder{Askable: true, Answers: map[string]any{
+		"items": []any{pick[0], pick[1]}, "lint-commits": true,
+	}}
+	if err := (Handler{}).Run(context.Background(), core.Command{
+		Util: "agent", Session: core.Session{GOOS: "linux", WorkingDir: project},
+	}, second); err != nil {
+		t.Fatalf("second run: %v", err)
+	}
+	after, err := os.Stat(prompt)
+	if err != nil {
+		t.Fatalf("Stat: %v", err)
+	}
+	if !after.ModTime().Equal(before.ModTime()) {
+		t.Error("running again rewrote a file that had not changed")
+	}
+}
+
+func TestStatusReportsAnEditedFile(t *testing.T) {
+	project := t.TempDir()
+	pick := []string{"conduct-of-go"}
+	reply := &coretest.Recorder{Askable: true, Answers: map[string]any{"items": []any{pick[0]}}}
+	if err := (Handler{}).Run(context.Background(), core.Command{
+		Util: "agent", Session: core.Session{GOOS: "linux", WorkingDir: project},
+	}, reply); err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+
+	target := filepath.Join(canonical(project), "prompts", "conduct-of-go.md")
+	if err := os.WriteFile(target, []byte("I rewrote this\n"), 0o644); err != nil {
+		t.Fatalf("edit: %v", err)
+	}
+
+	report := &coretest.Recorder{Askable: true}
+	if err := (Handler{}).Run(context.Background(), core.Command{
+		Util: "agent", Args: []string{"status"},
+		Session: core.Session{GOOS: "linux", WorkingDir: project},
+	}, report); err != nil {
+		t.Fatalf("status: %v", err)
+	}
+	said := strings.Join(report.Notices, "\n")
+	if !strings.Contains(said, "changed since it was generated") {
+		t.Errorf("status did not report the edit:\n%s", said)
+	}
+	if _, err := os.Stat(target); err != nil {
+		t.Errorf("status touched the file it was reporting on: %v", err)
+	}
+}
+
+func TestAProjectIsFoundFromASubdirectory(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, ".git"), 0o755); err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+	deep := filepath.Join(root, "a", "b")
+	if err := os.MkdirAll(deep, 0o755); err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+
+	got, err := projectOf(core.Session{GOOS: "linux", WorkingDir: deep})
+	if err != nil {
+		t.Fatalf("projectOf: %v", err)
+	}
+	if got != root {
+		t.Errorf("projectOf = %q, want the repository root %q", got, root)
+	}
+}
+
+func TestACommandThatWarnsStillFinishes(t *testing.T) {
+	// A warning is something said, not a result. Returning one ends the command with no
+	// result at all, and the client reports that as a failure — which is how a status
+	// report on an empty project came to look like a crash.
+	project := t.TempDir()
+	reply := &coretest.Recorder{Askable: true}
+
+	if err := (Handler{}).Run(context.Background(), core.Command{
+		Util: "agent", Args: []string{"status"},
+		Session: core.Session{GOOS: "linux", WorkingDir: project},
+	}, reply); err != nil {
+		t.Fatalf("status: %v", err)
+	}
+	if !reply.DidFinish {
+		t.Fatal("status warned and ended without a result")
+	}
+	if len(reply.Warnings) == 0 {
+		t.Error("status said nothing about a project with nothing in it")
+	}
+}
+
+func TestChoosingAHarnessArrangesForIt(t *testing.T) {
+	// The link and the base configuration are the part a user cannot see was missing: the
+	// documents generate correctly and Claude Code simply never reads them.
+	project := t.TempDir()
+	reply := &coretest.Recorder{Askable: true, Answers: map[string]any{
+		"items":     []any{"soppy-excalidraw"},
+		"harnesses": []any{"claude"},
+	}}
+	if err := (Handler{}).Run(context.Background(), core.Command{
+		Util: "agent", Session: core.Session{GOOS: "linux", WorkingDir: project},
+	}, reply); err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+
+	target, err := os.Readlink(filepath.Join(canonical(project), "..", ".claude", "skills"))
+	if err != nil {
+		t.Fatalf("no link was made for Claude Code: %v", err)
+	}
+	if target != filepath.Join("..", ".agents", "skills") {
+		t.Errorf("link target = %q", target)
+	}
+	if _, err := os.Stat(filepath.Join(project, ".claude", "settings.json")); err != nil {
+		t.Errorf("the base configuration was not written: %v", err)
+	}
+	// A harness that was not chosen is not arranged for.
+	if _, err := os.Stat(filepath.Join(project, ".pi")); err == nil {
+		t.Error(".pi was created although Pi was not chosen")
+	}
+
+	led, err := readLedger(project)
+	if err != nil {
+		t.Fatalf("readLedger: %v", err)
+	}
+	if len(led.Harnesses) != 1 || led.Harnesses[0] != "claude" {
+		t.Errorf("harnesses = %v, want the choice recorded so the next run remembers it",
+			led.Harnesses)
+	}
+}
+
+func TestAProjectWithoutAChosenHarnessGetsNoDirectories(t *testing.T) {
+	project := t.TempDir()
+	reply := &coretest.Recorder{Askable: true, Answers: map[string]any{
+		"items": []any{"conduct-of-go"}, "harnesses": []any{},
+	}}
+	if err := (Handler{}).Run(context.Background(), core.Command{
+		Util: "agent", Session: core.Session{GOOS: "linux", WorkingDir: project},
+	}, reply); err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+	for _, dir := range []string{".claude", ".codex", ".pi"} {
+		if _, err := os.Stat(filepath.Join(project, dir)); err == nil {
+			t.Errorf("%s was created although the harness was not chosen", dir)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(canonical(project), "prompts", "conduct-of-go.md")); err != nil {
+		t.Errorf("the document was not written: %v", err)
+	}
+}

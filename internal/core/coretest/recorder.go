@@ -42,6 +42,12 @@ type Recorder struct {
 	Warnings  []string
 	Actions   []action.Request
 	Finished  json.RawMessage
+
+	// DidFinish is separate from Finished because a command may finish with no result at
+	// all, and a nil result is indistinguishable from never having finished. The daemon
+	// treats the difference as fatal — "the command ended without a result" — so a test
+	// needs to be able to see it too.
+	DidFinish bool
 }
 
 func (r *Recorder) CanAsk() bool { return r.Askable }
@@ -89,6 +95,7 @@ func (r *Recorder) Confirm(_ context.Context, question string) (bool, error) {
 // method cannot share a name.
 func (r *Recorder) Finish(result json.RawMessage) error {
 	r.Finished = result
+	r.DidFinish = true
 	return nil
 }
 

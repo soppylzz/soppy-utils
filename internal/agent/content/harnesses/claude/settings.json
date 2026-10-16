@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "deny": [
+      "Edit(~/code/reference/**)",
+      "Write(~/code/reference/**)",
+      "NotebookEdit(~/code/reference/**)"
+    ]
+  }
+}
