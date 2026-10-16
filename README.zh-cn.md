@@ -8,7 +8,7 @@
 
 </div>
 
-`spu` 用一条命令收纳常用的开发工具。启动器基于 Bash 3.2；工具逻辑运行在一个 Go core 中，命令按需启动它并与之通信。发布包面向 Apple 芯片 Mac、x64 的 Ubuntu 24.04 LTS，以及使用 Git Bash 的 x64 Windows 10/11。发布版二进制无需安装 Go。
+`spu` 用一条命令收纳常用的开发工具。启动器基于 Bash 3.2；工具逻辑运行在一个 Go core 中，命令按需启动它并与之通信，核心在一段时间无人使用后会自行退出。发布包面向 Apple 芯片 Mac、x64 的 Ubuntu 24.04 LTS，以及使用 Git Bash 的 x64 Windows 10/11。发布版二进制无需安装 Go。
 
 ## 命令
 
@@ -48,7 +48,7 @@ spu update --status
 
 `spu welcome install` 生成 `~/.config/soppy-utils/welcome/welcome.sh`，还可以在 `~/.bashrc`、`~/.zshrc`、两者或都不接入（`--rc none`）写入受管理的启动区块。横幅只在交互式 Shell 启动时显示；非交互运行保持静默。存在 Powerlevel10k 标准 instant prompt 预加载代码时，Zsh 钩子会放在它之前，避免启动警告。`spu welcome edit` 修改保存的内容，更新程序后再次运行 `install` 可刷新生成脚本。以前的 `~/.config/soppy-utils/welcome.sh` 在校验通过后可用 `spu welcome migrate` 接管。如果旧的 `$SOPPY/shell/welcome.sh` 引用造成重复横幅，需要手动从 rc 文件中移除。
 
-FIGlet 和 fastfetch 都是可选工具。缺少 FIGlet 或自定义字体 `speed.flf`、`smslant.flf` 时，横幅会显示普通文字；缺少 fastfetch 时跳过系统信息。`spu welcome status` 可查看当前状态。`spu` 不会自动安装这些工具。
+FIGlet 和 fastfetch 都是可选工具。缺少 FIGlet 或自定义字体 `speed.flf`、`smslant.flf` 时，横幅会显示普通文字；缺少 fastfetch 时跳过系统信息。`spu welcome install` 会给出可安装它们的包管理器命令，并在执行前征求同意；`spu welcome status` 可查看当前状态。FIGlet 字体不在提议之列，因为 `spu` 没有约定的下载来源。
 
 `spu git install` 在 Git **全局**配置中注册 `~/.config/soppy-utils/git-custom-ini.gitconfig`。`spu git uninstall` 仅移除匹配的引用和未被改动的受管理文件，不会修改仓库本地设置。使用 VS Code 作为编辑、差异或合并工具时需要 `code` 命令。
 

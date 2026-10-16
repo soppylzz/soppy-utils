@@ -8,7 +8,7 @@
 
 </div>
 
-`spu` brings a few everyday development tools under one command. Its launcher runs on Bash 3.2; the tools run in a Go core that the command starts on demand and talks to. Release packages target Apple Silicon Macs, Ubuntu 24.04 LTS on x64, and Windows 10/11 on x64 with Git Bash. Release binaries do not require Go.
+`spu` brings a few everyday development tools under one command. Its launcher runs on Bash 3.2; the tools run in a Go core that the command starts on demand and talks to, and that exits on its own once nothing has used it for a while. Release packages target Apple Silicon Macs, Ubuntu 24.04 LTS on x64, and Windows 10/11 on x64 with Git Bash. Release binaries do not require Go.
 
 ## Commands
 
@@ -48,7 +48,7 @@ Run `spu <command> --help` for options. `spu license --mit` and `--isc` print on
 
 `spu welcome install` writes `~/.config/soppy-utils/welcome/welcome.sh` and can add marked hooks to `~/.bashrc`, `~/.zshrc`, both, or neither (`--rc none`). The banner appears only when an interactive shell starts; a noninteractive run stays silent. When the standard Powerlevel10k instant prompt preamble is present, the Zsh hook is placed before it to avoid a startup warning. `spu welcome edit` changes saved values, while another `install` refreshes the generated script after an upgrade. A previous managed `~/.config/soppy-utils/welcome.sh` can be adopted with `spu welcome migrate` when its checksum is valid. An older `$SOPPY/shell/welcome.sh` line in your rc file must be removed manually if it causes a duplicate banner.
 
-FIGlet and fastfetch are optional. Without FIGlet or the custom `speed.flf` and `smslant.flf` fonts, the banner uses plain text; without fastfetch, it skips the system summary. `spu welcome status` reports what is available. `spu` does not install these tools.
+FIGlet and fastfetch are optional. Without FIGlet or the custom `speed.flf` and `smslant.flf` fonts, the banner uses plain text; without fastfetch, it skips the system summary. `spu welcome install` offers the package manager command that would install them and asks before running it, and `spu welcome status` reports what is available. The FIGlet fonts are not offered, because there is no source `spu` installs them from.
 
 `spu git install` registers `~/.config/soppy-utils/git-custom-ini.gitconfig` in **global** Git configuration. `spu git uninstall` removes only the matching include and an unchanged managed file; it does not edit repository-local settings. VS Code editor, diff, and merge commands require the `code` CLI when used.
 
@@ -83,7 +83,7 @@ task smoke
 task hooks:install
 ```
 
-Development requires [go-task](https://taskfile.dev/docs/installation) v3. `task build` writes the native helper to `dist/`; `task package` builds three archives and `SHA256SUMS`. Override the output directory with `OUT_DIR=...`; set `SPU_PACKAGE_TARGETS=darwin/arm64` to package one target. To install a local Apple Silicon build, run `bash scripts/install.sh --archive dist/spu-v0.0.0-darwin-arm64.tar.gz` after packaging. `task smoke` builds and installs the native archive in an isolated temporary home.
+Development requires [go-task](https://taskfile.dev/docs/installation) v3. `task build` writes the native binary to `dist/`; `task package` builds three archives and `SHA256SUMS`. Override the output directory with `OUT_DIR=...`; set `SPU_PACKAGE_TARGETS=darwin/arm64` to package one target. To install a local Apple Silicon build, run `bash scripts/install.sh --archive dist/spu-v0.0.0-darwin-arm64.tar.gz` after packaging. `task smoke` builds and installs the native archive in an isolated temporary home.
 
 CI runs macOS arm64 smoke tests on macOS 15, Ubuntu x64 tests on 24.04 LTS, and Windows x64 tests on Windows Server 2025. GitHub does not provide hosted Windows 10/11 x64 runners, so desktop Windows compatibility needs separate manual verification. The formatter covers Bash and Go and requires shfmt; linting also requires ShellCheck. Windows commands run in Git Bash.
 

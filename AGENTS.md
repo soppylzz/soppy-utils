@@ -40,13 +40,24 @@ Welcome hooks run only from an interactive parent shell. Powerlevel10k instant p
 
 ## Shell and Go rules
 
-Use `#!/usr/bin/env bash` for all project-maintained shell scripts. Bash 3.2 is the floor; avoid Bash 4 associative arrays, namerefs, `mapfile`, and `globstar`. Use `${BASH_SOURCE[0]}` for script paths. In Windows Git Bash, pass `SPU_HOME_NATIVE` from `cygpath -w "$HOME"` before starting a native Go executable. Use Huh v2 for multi-field terminal interaction and keep one-shot CLI output clean on stdout.
+Use `#!/usr/bin/env bash` for all project-maintained shell scripts. Bash 3.2 is the floor; avoid Bash 4 associative arrays, namerefs, `mapfile`, and `globstar`. Use `${BASH_SOURCE[0]}` for script paths. In Windows Git Bash, pass `SPU_HOME_NATIVE` from `cygpath -w "$HOME"` before starting a native Go executable. Use Huh v2 for multi-field terminal interaction, but only in the client: a util package must not import it, and must not import `internal/client`, `internal/cored`, `internal/transport`, or any terminal library. Keep one-shot CLI output clean on stdout.
 
 For Go changes, keep file operations and migrations in the owning package or shared `internal/` helpers. Validate JSON with the pinned Draft 2020-12 validator and validate domain rules in Go. JSON Schema `default` annotations do not fill values; polyfills are explicit code. Use `os/exec` argument arrays for Git, not shell command strings.
 
+## Core and clients
+
+One executable is both a client and the core daemon it starts when it cannot reach one. These are the rules that keep the arrangement worth having, and a change that breaks one has broken the reason for it:
+
+- A util package owns behaviour only. It writes what it wants shown to an `io.Writer` and asks through a `core.Responder`; it never decides what a terminal is, and never prints to this process's output.
+- Capabilities are judged against the session's environment, never against the daemon's own. The daemon outlives the client that started it, so its `PATH` and home are the wrong answer for everyone who arrives later.
+- The registry is the only list of what exists, what each util accepts, and how it is judged. Do not add a second one for help, for dispatch, or in a shell script: this repository has had four of those, and each was wrong at least once.
+- A capability is a hint, never an authorization. Every command revalidates its own preconditions and reports a typed failure, because the machine changes between the snapshot and the call.
+- Work that changes the machine is never carried out without an answer.
+- Every boundary here is testable on its own. Go packages use `go test ./...`; a util's tests must not need a daemon, and a daemon's tests must not need a util.
+
 ## Lint and tests
 
-Use go-task v3 as the development and CI entry point: run `task format`, `task lint`, `task test`, and `task smoke`. `task check` runs lint and tests; `task build` writes a native helper to `dist/`. The underlying `scripts/dev/` commands remain available for direct use and the staged-snapshot hook. Lint requires ShellCheck, shfmt, Go, and gofmt. The optional hook is installed with `task hooks:install` and checks the staged snapshot without modifying the index. Bash specs use `test/general/helpers.sh`; Go packages use `go test ./...`. Do not introduce Node.js, npm, zunit, or another shell test runner. Keep tooling and runner scripts under `scripts/dev/`, never `bin/`. Test generated scripts in noninteractive shells and keep real user home and global Git config untouched by tests.
+Use go-task v3 as the development and CI entry point: run `task format`, `task lint`, `task test`, and `task smoke`. `task check` runs lint and tests; `task build` writes the native binary to `dist/`. The underlying `scripts/dev/` commands remain available for direct use and the staged-snapshot hook. Lint requires ShellCheck, shfmt, Go, and gofmt. The optional hook is installed with `task hooks:install` and checks the staged snapshot without modifying the index. Bash specs use `test/general/helpers.sh`; Go packages use `go test ./...`. Do not introduce Node.js, npm, zunit, or another shell test runner. Keep tooling and runner scripts under `scripts/dev/`, never `bin/`. Test generated scripts in noninteractive shells and keep real user home and global Git config untouched by tests.
 
 CI runs native tests and archive smoke tests on three targets through Task: macOS 15 arm64, Ubuntu 24.04 amd64, and Windows Server 2025 amd64. Windows Server is only a CI proxy for the Windows 10/11 desktop release target. `task package VERSION=<version> OUT_DIR=<output-dir>` invokes `scripts/dev/package.sh` to build three release archives and `SHA256SUMS`; CD validates them before tagging. `scripts/dev/version.sh` uses Conventional Commits: breaking changes bump major, `feat` bumps minor, other conventional commits bump patch.
 
