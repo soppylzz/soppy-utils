@@ -108,6 +108,10 @@ func TestApplyRefusesToReplaceALinkPointingElsewhere(t *testing.T) {
 	// Something is already at that path and it is not ours. Replacing it would discard a
 	// decision somebody made.
 	project := t.TempDir()
+	// Skills have to exist, or there is nothing to link and the path is never looked at.
+	if err := os.MkdirAll(filepath.Join(project, ".agents", "skills", "x"), 0o755); err != nil {
+		t.Fatalf("setup: %v", err)
+	}
 	if err := os.MkdirAll(filepath.Join(project, ".claude"), 0o755); err != nil {
 		t.Fatalf("setup: %v", err)
 	}
@@ -134,4 +138,25 @@ func contains(haystack []string, needle string) bool {
 		}
 	}
 	return false
+}
+
+func TestNoLinkIsMadeWhenThereAreNoSkills(t *testing.T) {
+	// A link into a directory that does not exist is a dead link, and it is worse than
+	// nothing: it looks like spu arranged something, and a harness reading it finds
+	// nothing there. Only a project that actually has skills needs the link.
+	project := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(project, ".agents", "prompts"), 0o755); err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+
+	done, err := Apply(project, []string{"claude"}, base())
+	if err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	if _, err := os.Lstat(filepath.Join(project, ".claude", "skills")); err == nil {
+		t.Error("a link was made although there are no skills to link to")
+	}
+	if contains(done, "linked .claude/skills") {
+		t.Errorf("a link that was not made was reported as made: %v", done)
+	}
 }

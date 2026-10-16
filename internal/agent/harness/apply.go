@@ -23,13 +23,18 @@ import (
 func Apply(project string, harnesses []string, base fs.FS) ([]string, error) {
 	var done []string
 
-	for _, link := range Links(project, harnesses) {
-		made, err := ensureLink(link)
-		if err != nil {
-			return done, err
-		}
-		if made {
-			done = append(done, "linked "+rel(project, link.Path))
+	// A link into a directory that is not there is a dead link, which looks like spu
+	// arranged something and gives a harness nothing to read. A project with no skills
+	// needs no link, and most projects have none.
+	if hasSkills(project) {
+		for _, link := range Links(project, harnesses) {
+			made, err := ensureLink(link)
+			if err != nil {
+				return done, err
+			}
+			if made {
+				done = append(done, "linked "+rel(project, link.Path))
+			}
 		}
 	}
 
@@ -41,6 +46,20 @@ func Apply(project string, harnesses []string, base fs.FS) ([]string, error) {
 		done = append(done, wrote...)
 	}
 	return done, nil
+}
+
+// hasSkills reports whether the canonical directory actually holds skills.
+func hasSkills(project string) bool {
+	info, err := os.Stat(filepath.Join(Dir(project, item.RootAgents), "skills"))
+	if err != nil {
+		return false
+	}
+	if !info.IsDir() {
+		return false
+	}
+	// An empty directory is not worth linking to either.
+	entries, err := os.ReadDir(filepath.Join(Dir(project, item.RootAgents), "skills"))
+	return err == nil && len(entries) > 0
 }
 
 // ensureLink creates a link when the path is free, and leaves it alone when it already
