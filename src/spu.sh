@@ -28,13 +28,9 @@ spu_go() {
 spu() {
   local util="${1:-}"
   case "$util" in
-  '' | help | -h)
-    printf '%s\n' 'Usage: spu <util> [args]' 'Utils: vscode, license, welcome, git, update'
-    ;;
-  --help)
-    printf '%s\n' 'Usage: spu <util> [args]' '  vscode   Open VS Code configuration' '  license  Generate MIT or ISC license' '  welcome  Generate a shell banner' '  git      Manage global Git defaults' '  update   Upgrade soppy-utils'
-    ;;
-  --version) spu_go --version ;;
+  # Help and version are the binary's: the list of utils lives in its registry, and a
+  # copy of it here is a copy that can be wrong.
+  '' | help | -h | --help | --version) spu_go "$@" ;;
   vscode)
     shift
     vscode_main "$@"

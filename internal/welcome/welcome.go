@@ -335,12 +335,6 @@ func Run(ctx context.Context, session core.Session, args []string, out io.Writer
 		return nil
 	}
 	switch args[0] {
-	case "-h":
-		fmt.Fprintln(out, "welcome: generate an interactive shell banner")
-		return nil
-	case "--help":
-		fmt.Fprintln(out, "Usage: spu welcome install [--name NAME] [--device DEVICE] [--message TEXT] [--rc none|bash|zsh|both]\n       spu welcome uninstall [--purge]\n       spu welcome edit|migrate|status")
-		return nil
 	case "status":
 		fmt.Fprintf(out, "config contract: %d (required %d)\n", v.StoredVersion, s.Current)
 		if err := checkOwned(s); err != nil {

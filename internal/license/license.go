@@ -103,12 +103,6 @@ func Run(ctx context.Context, session core.Session, args []string, out io.Writer
 				}
 				return nil
 			})
-		case "--help":
-			fmt.Fprintln(out, "Usage: spu license [--mit|--isc] [--name NAME] [--year YEAR] [--output FILE]\n       spu license edit|migrate [--answers FILE]")
-			return nil
-		case "-h":
-			fmt.Fprintln(out, "license: generate an MIT or ISC license")
-			return nil
 		case "edit", "migrate":
 			return edit(ctx, s, v, args, reply)
 		}

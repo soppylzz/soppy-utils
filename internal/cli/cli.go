@@ -71,6 +71,27 @@ func run(args []string, version string) (int, error) {
 		return 0, nil
 	}
 
+	// Help is rendered here from the registry, not by core and not from a list beside it.
+	// A util's options are described by the capability that owns them, so what `--help`
+	// says and what the argument parser accepts cannot disagree.
+	if len(args) == 1 && (args[0] == "help" || args[0] == "-h" || args[0] == "--help") {
+		r, err := buildRegistry()
+		if err != nil {
+			return 1, err
+		}
+		return 0, helpFor(r, os.Stdout)
+	}
+	if len(args) == 2 && (args[1] == "--help" || args[1] == "-h") && known(args[0]) {
+		r, err := buildRegistry()
+		if err != nil {
+			return 1, err
+		}
+		if args[1] == "-h" {
+			return 0, briefFor(r, os.Stdout, args[0])
+		}
+		return 0, utilHelpFor(r, os.Stdout, args[0])
+	}
+
 	home, err := configstore.Home()
 	if err != nil {
 		return 1, err

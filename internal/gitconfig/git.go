@@ -282,12 +282,6 @@ func Run(ctx context.Context, session core.Session, args []string, out io.Writer
 		return nil
 	}
 	switch args[0] {
-	case "-h":
-		fmt.Fprintln(out, "git: manage global Git defaults")
-		return nil
-	case "--help":
-		fmt.Fprintln(out, "Usage: spu git install|uninstall [--purge]|edit|migrate|status")
-		return nil
 	case "status":
 		entries, err := includes()
 		if err != nil {
