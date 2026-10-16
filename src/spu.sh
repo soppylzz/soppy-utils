@@ -39,17 +39,17 @@ spu() {
     shift
     vscode_main "$@"
     ;;
-  license | welcome | git)
-    shift
-    spu_go "$util" "$@"
-    ;;
   update)
     shift
     bash "$spu_root/scripts/update.sh" "$@"
     ;;
-  *)
-    err "spu: unknown util: $util"
-    return 1
-    ;;
+  # Everything else is the Go binary's to route. A list of utils here would be a second
+  # list to keep in step with the registry, and it was already one: __core was unknown to
+  # this dispatcher, so the scripts could not ask a running core to stop.
+  #
+  # This case has to stay last. It was written before the update case first, which made
+  # update unreachable — ShellCheck's SC2222, and an upgrade path that silently stopped
+  # working.
+  *) spu_go "$@" ;;
   esac
 }

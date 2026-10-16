@@ -158,6 +158,17 @@ binary_suffix=''
   exit 1
 }
 
+# Stop any core the installation is running, before the swap. On Windows a running
+# executable cannot be replaced, and on every platform a daemon left behind is a process
+# holding a file that no longer exists. The old binary is the one to ask, because the
+# daemon it started is the one running.
+installed="$target/libexec/spu$binary_suffix"
+if [[ -x "$installed" ]]; then
+  if ! "$installed" __core shutdown; then
+    echo 'install: the running core did not stop; it is about to be replaced underneath' >&2
+  fi
+fi
+
 mkdir -p "$(dirname "$target")" "$(dirname "$launcher")"
 backup="$tmp/previous"
 if [[ -e "$target" ]]; then mv "$target" "$backup"; fi

@@ -46,6 +46,14 @@ else
   echo 'uninstall: launcher is unmanaged or missing; leaving it' >&2
 fi
 
+# The purge above may have started a core, and deleting the installation from under it
+# leaves a process running a binary that no longer exists.
+if [[ -x "$binary" ]]; then
+  if ! "$binary" __core shutdown; then
+    echo 'uninstall: the running core did not stop' >&2
+  fi
+fi
+
 rm -r -- "$target"
 
 if [[ "$purge" != true ]]; then
