@@ -17,9 +17,12 @@ Write code comments, commit messages, requirement documents, and the English REA
 - `bin/spu`: thin Bash launcher.
 - `src/spu.sh`, `src/utils/style.sh`: the launcher's dispatcher and its presentation helpers.
 - `cmd/spu`: the one executable. It is a client, and the core daemon it starts when it cannot reach one.
+- `cmd/spu-clone-third-party`: a second binary, an MCP server over stdio. It is deliberately not a mode of `spu`: it needs no daemon, speaks somebody else's protocol, and a fault in it must not take a person's shell tools down with it.
 - `internal/clioutput`: shared Go CLI diagnostics on stderr.
 - `internal/configstore`: per-util `VERSION`, JSON config, schema validation, and in-memory defaults.
 - `internal/{welcome,license,gitconfig,vscode}`: util-specific behaviour, form and action descriptions, templates, and ownership rules.
+- `internal/agent`: the `agent` util, split so each boundary is testable alone. `internal/agent/item` parses and validates an item definition, `render` turns answers into an output's bytes, `ledger` reads and writes `spu.json`, `decide` is the fact-and-policy table with no filesystem in it, `harness` knows where each coding agent reads text, and `content` is what is embedded.
+- `internal/thirdparty`: the cache behind `spu-clone-third-party`.
 - `internal/{protocol,transport,registry,form,action,core,cored,client,cli}`: the core and the clients that talk to it.
 - `Taskfile.yml`: go-task entry point for development, build, and CI commands.
 - `.githooks/pre-commit`: optional staged-snapshot quality gate.
@@ -33,6 +36,8 @@ The public Git command is `spu git`; `spu git-custom-ini` is not an alias. The m
 ## Configuration contracts
 
 Each Go util owns `~/.config/soppy-utils/<util>/{VERSION,config.json}`. `VERSION` is an integer configuration contract version, independent of the package release version. `config.json` has the same `schema_version`, a `util` name, and typed `data`. Schemas are embedded in their util package. Generated artifacts use `state.json` for hashes and provenance.
+
+`spu agent` keeps its own record in the project it generates into, at `.agents/spu.json`, not under the configuration directory: what was generated belongs to the project, and a second machine cloning it should start from nothing rather than from somebody else's answers. A path is spu's only if that record names it; existence alone never implies it. The recorded SHA-256 decides nothing by itself — it is a fact the item's `on_modified` policy reads.
 
 Ordinary commands warn once on a known older contract and use an in-memory default polyfill. They do not persist migration. `spu <util> migrate` or `edit` is explicit; `spu update` checks for mismatches without rewriting config or opening forms. Treat future versions, malformed files, and `VERSION`/JSON disagreements as read-only conflicts. Never overwrite a modified managed artifact. Build generated shell scripts from trusted embedded templates and quote user data as inert Bash words.
 

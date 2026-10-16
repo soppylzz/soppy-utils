@@ -18,6 +18,7 @@
 | `spu license` | 用命令行参数或终端表单生成 MIT、ISC 许可证 |
 | `spu welcome` | 生成欢迎横幅，可选接入 Bash 或 Zsh |
 | `spu git` | 通过单个 `include.path` 管理 Git 全局默认配置 |
+| `spu agent` | 生成项目的 agent 约定文档与 skill |
 | `spu update` | 更新已安装的发布版并报告配置版本差异 |
 
 ## 安装
@@ -53,6 +54,20 @@ FIGlet 和 fastfetch 都是可选工具。缺少 FIGlet 或自定义字体 `spee
 `spu git install` 在 Git **全局**配置中注册 `~/.config/soppy-utils/git-custom-ini.gitconfig`。`spu git uninstall` 仅移除匹配的引用和未被改动的受管理文件，不会修改仓库本地设置。使用 VS Code 作为编辑、差异或合并工具时需要 `code` 命令。
 
 每个 Go 工具在 `~/.config/soppy-utils/<util>/` 下保存 `VERSION` 与 `config.json`。`VERSION` 是该工具的配置格式版本，与程序发布版本无关。`spu update` 遇到差异只提示，不打开表单，也不重写偏好或生成文件。对于已知的旧配置，普通命令在内存中补默认值；运行 `spu <util> migrate` 或 `edit` 后才会保存更新。自动化场景可运行 `spu <util> migrate --answers FILE`，其中 JSON 对象须包含 `util`、当前 `schema_version` 和 `data`。
+
+`spu agent` 把编码 agent 要读的文本生成到一个规范目录 `.agents/` 中：由你选择的约定文档与 skill，内容来自内嵌在 `spu` 里的 item 定义。它会先问要生成哪些 item，再问每个 item 的问题，并把写了什么、用什么答案写的记录在 `.agents/spu.json` 里。
+
+目前支持三个 harness。Pi 和 Codex 自己就读 `.agents/skills`，规范目录直接对它们生效；Claude Code 不读，因此会得到唯一一个指向它的 `.claude/skills` 链接。若目标路径已存在文件，spu 绝不覆盖：只有记录中点名的路径才算 spu 的，`spu agent status` 会报告生成以来发生的改动。
+
+```sh
+spu agent                  # 选择并生成
+spu agent status           # 已生成、缺失、已改动
+spu agent edit             # 重新回答某个 item 的问题
+```
+
+不要修改生成的文件。把你要补充的内容另写一份放在旁边，并在 `AGENTS.md` 中说明；你自己拥有的文档永远不会被动。要改变生成文档的内容，就改变它依据的答案。
+
+`spu-clone-third-party` 与 `spu` 一同安装。它是一个 MCP 服务，把第三方包的本地检出交给 agent 阅读，让 agent 读本地目录而不是反复发网络请求。主版本号匹配的检出会被直接复用、完全不联网；具体版本绝不会被自行拉取，因为未经确认就拉取固定版本正是缓存变成供应链的方式。
 
 ## 卸载
 

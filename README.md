@@ -18,6 +18,7 @@
 | `spu license` | Create an MIT or ISC license with flags or a terminal form |
 | `spu welcome` | Generate a shell banner and optionally load it from Bash or Zsh |
 | `spu git` | Manage global Git defaults through one `include.path` |
+| `spu agent` | Generate a project's agent conventions and skills |
 | `spu update` | Upgrade an installed release and report config version differences |
 
 ## Install
@@ -53,6 +54,20 @@ FIGlet and fastfetch are optional. Without FIGlet or the custom `speed.flf` and 
 `spu git install` registers `~/.config/soppy-utils/git-custom-ini.gitconfig` in **global** Git configuration. `spu git uninstall` removes only the matching include and an unchanged managed file; it does not edit repository-local settings. VS Code editor, diff, and merge commands require the `code` CLI when used.
 
 Each Go util keeps a `VERSION` and `config.json` under `~/.config/soppy-utils/<util>/`. `VERSION` tracks that util's configuration format, independently of the package release. `spu update` reports mismatches without opening forms or rewriting preferences and generated files. Older recognized configs use in-memory defaults until you run `spu <util> migrate` or `edit`. For automation, use `spu <util> migrate --answers FILE` with a JSON object containing `util`, the current `schema_version`, and `data`.
+
+`spu agent` generates the text a coding agent reads into one canonical `.agents/` directory: the conventions documents and skills you choose, from item definitions embedded in `spu`. It asks which items to generate, then each item's questions, and records what it wrote and with which answers in `.agents/spu.json`.
+
+Three harnesses are understood. Pi and Codex read `.agents/skills` themselves, so the canonical directory reaches them directly; Claude Code does not, and gets a single `.claude/skills` link to it. A project with an existing file at one of these paths is never overwritten: a path counts as spu's only when the record names it, and `spu agent status` reports what has changed since it was generated.
+
+```sh
+spu agent                  # choose and generate
+spu agent status           # what is generated, missing, or changed
+spu agent edit             # answer one item's questions again
+```
+
+Do not edit a generated file. Add your own document beside it and say so in `AGENTS.md`; a document you own is never touched. Changing what a generated document says means changing the answer it came from.
+
+`spu-clone-third-party` is installed alongside `spu`. It is an MCP server that hands an agent a local checkout of a third-party package to read, so an agent reads a directory instead of making repeated web requests. A checkout whose major version matches is reused without any network access; an exact version is never fetched on its own, because pulling a pinned version without being told to is how a cache becomes a supply chain.
 
 ## Uninstall
 
