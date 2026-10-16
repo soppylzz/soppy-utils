@@ -18,6 +18,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/soppylzz/soppy-utils/internal/action"
 	"github.com/soppylzz/soppy-utils/internal/form"
 	"github.com/soppylzz/soppy-utils/internal/protocol"
 	"github.com/soppylzz/soppy-utils/internal/registry"
@@ -38,6 +39,11 @@ type Responder interface {
 	// Ask sends a form and waits for the values. It is how a command collects what it
 	// needs without knowing how the client will ask.
 	Ask(ctx context.Context, spec form.Spec) (map[string]any, error)
+
+	// AskActions offers work core cannot do itself, such as installing a package that
+	// needs privileges. A client that cannot perform it is told what is missing and
+	// asked nothing, and the outcome says so.
+	AskActions(ctx context.Context, req action.Request) (action.Outcome, error)
 
 	// Finish ends the session and carries its result.
 	Finish(result json.RawMessage) error
@@ -328,9 +334,10 @@ func (d *Daemon) serveConn(ctx context.Context, raw net.Conn) {
 
 // connState is what one connection has established about itself.
 type connState struct {
-	conn        *clientConn
-	env         Env
-	initialized bool
+	conn         *clientConn
+	env          Env
+	capabilities clientCapabilities
+	initialized  bool
 
 	mu       sync.Mutex
 	sessions map[string]*session
@@ -418,9 +425,13 @@ func (d *Daemon) dispatch(
 
 func (d *Daemon) respond(state *connState, params json.RawMessage) (json.RawMessage, *protocol.Error) {
 	var p struct {
-		SessionID string          `json:"session_id"`
-		RequestID int64           `json:"request_id"`
-		Values    json.RawMessage `json:"values"`
+		SessionID string `json:"session_id"`
+		RequestID int64  `json:"request_id"`
+
+		// Answer is whatever the question asked for: a form's values, or an action
+		// request's outcome. It is opaque here because the session knew what it asked,
+		// and the client's answer is only meaningful to the question that waits for it.
+		Answer json.RawMessage `json:"answer"`
 	}
 	if err := json.Unmarshal(params, &p); err != nil {
 		return nil, &protocol.Error{
@@ -430,7 +441,7 @@ func (d *Daemon) respond(state *connState, params json.RawMessage) (json.RawMess
 	}
 
 	sess, ok := state.session(p.SessionID)
-	if !ok || !sess.deliver(p.RequestID, p.Values) {
+	if !ok || !sess.deliver(p.RequestID, p.Answer) {
 		// A late answer is ordinary: the user filled a form and the session was
 		// cancelled first. Reported, because a client answering the wrong question is
 		// worth seeing, but it must not take the connection down.
@@ -499,9 +510,10 @@ func (d *Daemon) startSession(
 
 	sctx, cancel := context.WithCancel(ctx)
 	s := &session{
-		id:     fmt.Sprintf("s%d", d.sessionSeq.Add(1)),
-		cancel: cancel,
-		conn:   state.conn,
+		id:           fmt.Sprintf("s%d", d.sessionSeq.Add(1)),
+		cancel:       cancel,
+		conn:         state.conn,
+		capabilities: state.capabilities,
 	}
 	state.addSession(s)
 
@@ -535,10 +547,11 @@ func (d *Daemon) startSession(
 
 type initializeParams struct {
 	Client struct {
-		Kind             string `json:"kind"`
-		Version          string `json:"version"`
-		ProtocolVersions []int  `json:"protocol_versions"`
-		Env              Env    `json:"env"`
+		Kind             string             `json:"kind"`
+		Version          string             `json:"version"`
+		ProtocolVersions []int              `json:"protocol_versions"`
+		Capabilities     clientCapabilities `json:"capabilities"`
+		Env              Env                `json:"env"`
 	} `json:"client"`
 }
 
@@ -579,6 +592,7 @@ func (d *Daemon) initialize(state *connState, params json.RawMessage) (json.RawM
 		}
 	}
 	state.env = p.Client.Env
+	state.capabilities = p.Client.Capabilities
 	state.initialized = true
 
 	out, err := json.Marshal(initializeResult{

@@ -52,7 +52,7 @@ func (c *client) awaitInputFor() (requestID int64, sessionID, spec string) {
 
 func (c *client) answer(requestID int64, sessionID, values string) {
 	c.t.Helper()
-	params := fmt.Sprintf(`{"session_id":%q,"request_id":%d,"values":%s}`, sessionID, requestID, values)
+	params := fmt.Sprintf(`{"session_id":%q,"request_id":%d,"answer":%s}`, sessionID, requestID, values)
 	if reply := c.call("session/respond", params); reply.Error != nil {
 		c.t.Fatalf("session/respond: %+v", reply.Error)
 	}

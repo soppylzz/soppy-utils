@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"strings"
 	"sync"
 
+	"github.com/soppylzz/soppy-utils/internal/action"
 	"github.com/soppylzz/soppy-utils/internal/form"
 	"github.com/soppylzz/soppy-utils/internal/protocol"
 )
@@ -39,9 +41,10 @@ func (c *clientConn) write(v any) error {
 // look to the client like a second session ending, or silently replace the result it
 // already acted on.
 type session struct {
-	id     string
-	cancel context.CancelFunc
-	conn   *clientConn
+	id           string
+	cancel       context.CancelFunc
+	conn         *clientConn
+	capabilities clientCapabilities
 
 	mu       sync.Mutex
 	ended    bool
@@ -51,15 +54,61 @@ type session struct {
 
 // Ask sends a form to the client and waits for the answers.
 //
-// This is the heart of what core does not do: it decides which fields it needs and
-// what each accepts, and the client decides how to ask. A terminal renders one with a
-// form library and a window renders the same description with markup, which is why the
-// two clients can be equal rather than one of them degrading into a prompt.
-//
-// The answers come back on a correlation id rather than as a reply to this message.
-// Both directions of this connection carry requests, and sharing one id space between
-// them would mean a client's request 1 and core's request 1 are the same number.
+// This is the heart of what core does not do: it decides which fields it needs and what
+// each accepts, and the client decides how to ask. A terminal renders one with a form
+// library and a window renders the same description with markup, which is why the two
+// clients can be equal rather than one of them degrading into a prompt.
 func (s *session) Ask(ctx context.Context, spec form.Spec) (map[string]any, error) {
+	answer, err := s.question(ctx, "session/request_input", map[string]any{"spec": spec})
+	if err != nil {
+		return nil, err
+	}
+	if len(answer) == 0 {
+		return nil, nil
+	}
+	var values map[string]any
+	if err := json.Unmarshal(answer, &values); err != nil {
+		return nil, fmt.Errorf("answer to session %s: %w", s.id, err)
+	}
+	return values, nil
+}
+
+// AskActions offers work that core cannot do itself.
+//
+// A client that did not say it can run actions is asked nothing. It is told what is
+// missing instead, because the warning still has to reach a human reading the output,
+// and the session continues: a dependency that cannot be installed leaves a util
+// degraded, which is a legitimate state rather than a failure.
+func (s *session) AskActions(ctx context.Context, req action.Request) (action.Outcome, error) {
+	if !s.capabilities.ActionExecution {
+		if err := s.Notify(missingNote(req)); err != nil {
+			return action.Outcome{}, err
+		}
+		return action.Outcome{Declined: true}, nil
+	}
+
+	answer, err := s.question(ctx, "session/request_action", map[string]any{
+		"reason":  req.Reason,
+		"actions": req.Actions,
+	})
+	if err != nil {
+		return action.Outcome{}, err
+	}
+	var out action.Outcome
+	if len(answer) > 0 {
+		if err := json.Unmarshal(answer, &out); err != nil {
+			return action.Outcome{}, fmt.Errorf("answer to session %s: %w", s.id, err)
+		}
+	}
+	return out, nil
+}
+
+// question sends something to the client and waits for the answer.
+//
+// The answer comes back on a correlation id rather than as a reply to this message.
+// Both directions of this connection carry requests, and sharing one id space between
+// them would make a client's request 1 and core's request 1 the same number.
+func (s *session) question(ctx context.Context, method string, params map[string]any) (json.RawMessage, error) {
 	s.mu.Lock()
 	if s.ended {
 		s.mu.Unlock()
@@ -80,33 +129,42 @@ func (s *session) Ask(ctx context.Context, spec form.Spec) (map[string]any, erro
 		s.mu.Unlock()
 	}()
 
-	payload, err := json.Marshal(map[string]any{
-		"session_id": s.id,
-		"request_id": id,
-		"spec":       spec,
-	})
+	params["session_id"] = s.id
+	params["request_id"] = id
+	payload, err := json.Marshal(params)
 	if err != nil {
-		return nil, fmt.Errorf("encode session/request_input: %w", err)
+		return nil, fmt.Errorf("encode %s: %w", method, err)
 	}
-	if err := s.conn.write(protocol.NewNotification("session/request_input", payload)); err != nil {
+	if err := s.conn.write(protocol.NewNotification(method, payload)); err != nil {
 		return nil, err
 	}
 
 	select {
 	case raw := <-answer:
-		if len(raw) == 0 {
-			return nil, nil
-		}
-		var values map[string]any
-		if err := json.Unmarshal(raw, &values); err != nil {
-			return nil, fmt.Errorf("answer to session %s: %w", s.id, err)
-		}
-		return values, nil
+		return raw, nil
 	case <-ctx.Done():
-		// The client went away, or the session was cancelled. Either way nobody is
-		// going to answer, and a handler left waiting here would hold its session open.
+		// The client went away, or the session was cancelled. Either way nobody is going
+		// to answer, and a handler left waiting here would hold its session open.
 		return nil, ctx.Err()
 	}
+}
+
+// missingNote is what a user sees when nothing can be installed for them.
+func missingNote(req action.Request) string {
+	what := req.Reason
+	if what == "" {
+		parts := make([]string, 0, len(req.Actions))
+		for _, a := range req.Actions {
+			switch {
+			case len(a.Argv) > 0:
+				parts = append(parts, strings.Join(a.Argv, " "))
+			case a.URL != "":
+				parts = append(parts, a.URL)
+			}
+		}
+		what = "this needs " + strings.Join(parts, ", ")
+	}
+	return what + "; this client cannot install it"
 }
 
 // deliver hands answers to the request that asked for them, reporting whether one was
