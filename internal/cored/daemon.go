@@ -493,7 +493,11 @@ func (d *Daemon) startSession(
 		defer state.dropSession(s.id)
 		defer cancel()
 
-		err := d.opts.Handler.Run(sctx, core.Command{Util: p.Util, Args: p.Args}, s)
+		err := d.opts.Handler.Run(sctx, core.Command{
+			Util: p.Util,
+			Args: p.Args,
+			Home: state.env.HomeForFilesystem(),
+		}, s)
 		if err == nil && s.hasEnded() {
 			return
 		}

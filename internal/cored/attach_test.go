@@ -225,3 +225,28 @@ func TestAttachReportsThatNoDaemonCouldBeStarted(t *testing.T) {
 		t.Fatal("Attach succeeded with nothing to attach to and nothing to start, want an error")
 	}
 }
+
+func TestAttachCreatesTheDirectoryTheDaemonLogNeeds(t *testing.T) {
+	// A machine where nothing has been installed has no configuration directory yet,
+	// and the daemon's log is the first thing that wants one. Failing here would mean
+	// spu could not run at all until something else had created the directory.
+	home := shortDir(t)
+	ep, err := transport.Resolve("linux", home, "")
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	argv, env := spawnAsDaemon(t, home, filepath.Join(shortDir(t), "report.json"))
+
+	conn := attachForTest(t, AttachOptions{
+		Endpoint: ep,
+		Spawn:    argv,
+		SpawnEnv: env,
+		LogPath:  filepath.Join(home, ".config", "soppy-utils", "core.log"),
+		Budget:   10 * time.Second,
+	})
+	defer conn.Close()
+
+	if _, err := os.Stat(filepath.Join(home, ".config", "soppy-utils", "core.log")); err != nil {
+		t.Errorf("no log was written: %v", err)
+	}
+}

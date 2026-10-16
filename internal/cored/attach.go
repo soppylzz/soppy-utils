@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/soppylzz/soppy-utils/internal/transport"
@@ -77,4 +79,21 @@ func Attach(ctx context.Context, opts AttachOptions) (net.Conn, error) {
 	}
 
 	return nil, fmt.Errorf("core did not answer on %s within %s", opts.Endpoint.Address, opts.Budget)
+}
+
+// openLog prepares the daemon's log.
+//
+// The directory is created here because a machine where nothing has been installed yet
+// has no configuration directory, and this is the first thing that wants one. Failing
+// to create it would mean spu could not run at all until something else had.
+func openLog(logPath string) (*os.File, error) {
+	dir := filepath.Dir(logPath)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return nil, fmt.Errorf("create %s: %w", dir, err)
+	}
+	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
+	if err != nil {
+		return nil, fmt.Errorf("open %s: %w", logPath, err)
+	}
+	return f, nil
 }

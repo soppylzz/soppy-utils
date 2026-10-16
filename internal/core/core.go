@@ -18,6 +18,11 @@ import (
 type Command struct {
 	Util string
 	Args []string
+
+	// Home is the home of the session that asked, which is not necessarily this
+	// process's: the daemon outlives the client that started it, and a later client may
+	// be a different user session entirely. Every util works on this one.
+	Home string
 }
 
 // Responder is how a running command talks to the client that asked for it.
@@ -36,6 +41,13 @@ type Responder interface {
 
 	// Finish ends the session and carries its result.
 	Finish(result json.RawMessage) error
+
+	// CanAsk reports whether a person is available to answer.
+	//
+	// A command that needs values uses it to choose between asking and falling back to
+	// documented defaults. Only the responder knows: whether a terminal is attached is
+	// a fact about the client, and the daemon it is talking to cannot see one.
+	CanAsk() bool
 }
 
 // Handler runs commands.

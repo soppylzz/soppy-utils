@@ -26,9 +26,9 @@ func startDetached(argv, env []string, logPath string) (*os.Process, error) {
 	}
 	defer stdin.Close()
 
-	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
+	logFile, err := openLog(logPath)
 	if err != nil {
-		return nil, fmt.Errorf("open %s: %w", logPath, err)
+		return nil, err
 	}
 	defer logFile.Close()
 

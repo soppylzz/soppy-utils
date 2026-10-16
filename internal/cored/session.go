@@ -185,6 +185,10 @@ func (s *session) deliver(requestID int64, values json.RawMessage) bool {
 	return true
 }
 
+// CanAsk reports whether the client that started this session said a person is
+// available to answer.
+func (s *session) CanAsk() bool { return s.capabilities.Interactive }
+
 // Notify reports progress. It is a notification rather than a request because a util
 // saying what it is doing is not asking a question.
 func (s *session) Notify(message string) error {
