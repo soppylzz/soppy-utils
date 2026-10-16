@@ -2,6 +2,7 @@ package welcome
 
 import (
 	"context"
+	"github.com/soppylzz/soppy-utils/internal/core/coretest"
 	"io"
 	"os"
 	"path/filepath"
@@ -95,7 +96,7 @@ func TestTheFlagSetsItForScriptedInstalls(t *testing.T) {
 	// A scripted install cannot answer a form, so anything the form can set has to be
 	// settable from the command line.
 	home := t.TempDir()
-	r := &recorder{}
+	r := &coretest.Recorder{}
 	args := []string{"install", "--name", "Alice", "--device", "Mac",
 		"--message", "Ready", "--rc", "none", "--banner-in-tmux"}
 

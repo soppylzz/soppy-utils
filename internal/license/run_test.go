@@ -3,7 +3,7 @@ package license
 import (
 	"context"
 	"encoding/json"
-	"errors"
+	"github.com/soppylzz/soppy-utils/internal/core/coretest"
 	"io"
 	"os"
 	"path/filepath"
@@ -11,63 +11,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/soppylzz/soppy-utils/internal/action"
 	"github.com/soppylzz/soppy-utils/internal/core"
 	"github.com/soppylzz/soppy-utils/internal/form"
 	"github.com/soppylzz/soppy-utils/internal/registry"
 )
-
-// recorder stands in for a client: it remembers what a command reported and answers
-// whatever the test told it to.
-type recorder struct {
-	canAsk   bool
-	answers  map[string]any
-	confirms []bool
-
-	asked     []form.Spec
-	questions []string
-	notices   []string
-	finish    json.RawMessage
-}
-
-func (r *recorder) CanAsk() bool { return r.canAsk }
-
-func (r *recorder) Notify(message string) error {
-	r.notices = append(r.notices, message)
-	return nil
-}
-
-func (r *recorder) Ask(_ context.Context, spec form.Spec) (map[string]any, error) {
-	r.asked = append(r.asked, spec)
-	if r.answers == nil {
-		return nil, errors.New("this test's client has nothing to answer with")
-	}
-	return r.answers, nil
-}
-
-func (r *recorder) AskActions(context.Context, action.Request) (action.Outcome, error) {
-	return action.Outcome{Declined: true}, nil
-}
-
-func (r *recorder) Confirm(_ context.Context, question string) (bool, error) {
-	r.questions = append(r.questions, question)
-	if len(r.confirms) == 0 {
-		// Nobody said yes.
-		return false, nil
-	}
-	answer := r.confirms[0]
-	r.confirms = r.confirms[1:]
-	return answer, nil
-}
-
-func (r *recorder) Finish(result json.RawMessage) error {
-	r.finish = result
-	return nil
-}
-
-func sessionFor(home string) core.Session {
-	return core.Session{Home: home, GOOS: runtime.GOOS}
-}
 
 func TestTheCreateFormIsTheSchemaPlusWhatIsNotConfiguration(t *testing.T) {
 	// type, author, and output are stored preferences, so they are projected from the
@@ -116,7 +63,7 @@ func TestCoreValidatesTheYearItIsGiven(t *testing.T) {
 	// year is core's to decide, and the answer is not taken on trust.
 	for _, year := range []string{"abcd", "999", "20000", ""} {
 		home := t.TempDir()
-		r := &recorder{canAsk: true, confirms: []bool{true}, answers: map[string]any{
+		r := &coretest.Recorder{Askable: true, Confirms: []bool{true}, Answers: map[string]any{
 			"type": "mit", "author": "Alice", "output": "LICENSE",
 			"year": year, "save_defaults": false,
 		}}
@@ -130,7 +77,7 @@ func TestCoreValidatesTheYearItIsGiven(t *testing.T) {
 func TestGeneratingIsConfirmedBeforeAnythingIsWritten(t *testing.T) {
 	home := t.TempDir()
 	out := &strings.Builder{}
-	r := &recorder{canAsk: true, confirms: []bool{false}, answers: map[string]any{
+	r := &coretest.Recorder{Askable: true, Confirms: []bool{false}, Answers: map[string]any{
 		"type": "mit", "author": "Alice", "output": "LICENSE",
 		"year": "2026", "save_defaults": false,
 	}}
@@ -138,11 +85,11 @@ func TestGeneratingIsConfirmedBeforeAnythingIsWritten(t *testing.T) {
 	if err := Run(context.Background(), sessionFor(home), []string{}, out, r); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	if len(r.questions) == 0 {
+	if len(r.Questions) == 0 {
 		t.Fatal("nothing was confirmed before writing")
 	}
-	if !strings.Contains(r.questions[0], "MIT") || !strings.Contains(r.questions[0], "Alice") {
-		t.Errorf("question = %q, want the summary in it", r.questions[0])
+	if !strings.Contains(r.Questions[0], "MIT") || !strings.Contains(r.Questions[0], "Alice") {
+		t.Errorf("question = %q, want the summary in it", r.Questions[0])
 	}
 	// Saying no leaves nothing behind and nothing written.
 	if _, err := os.Stat(filepath.Join(home, "LICENSE")); !os.IsNotExist(err) {
@@ -161,7 +108,7 @@ func TestReplacingAnExistingFileIsConfirmedSeparately(t *testing.T) {
 	}
 
 	out := &strings.Builder{}
-	r := &recorder{canAsk: true, confirms: []bool{true, false}, answers: map[string]any{
+	r := &coretest.Recorder{Askable: true, Confirms: []bool{true, false}, Answers: map[string]any{
 		"type": "mit", "author": "Alice", "output": target,
 		"year": "2026", "save_defaults": false,
 	}}
@@ -169,9 +116,9 @@ func TestReplacingAnExistingFileIsConfirmedSeparately(t *testing.T) {
 	if err := Run(context.Background(), sessionFor(home), []string{}, out, r); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	if len(r.questions) != 2 {
+	if len(r.Questions) != 2 {
 		t.Fatalf("asked %d questions, want one to generate and one to replace: %v",
-			len(r.questions), r.questions)
+			len(r.Questions), r.Questions)
 	}
 	got, err := os.ReadFile(target)
 	if err != nil {
@@ -186,14 +133,14 @@ func TestAOneShotLicenseAsksNothing(t *testing.T) {
 	// spu license --mit is the common case in a script, and it must not need a terminal.
 	home := t.TempDir()
 	out := &strings.Builder{}
-	r := &recorder{canAsk: false}
+	r := &coretest.Recorder{Askable: false}
 
 	if err := Run(context.Background(), sessionFor(home),
 		[]string{"--mit", "--name", "Alice", "--year", "2026"}, out, r); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	if len(r.asked) != 0 || len(r.questions) != 0 {
-		t.Errorf("asked %d forms and %d questions, want none", len(r.asked), len(r.questions))
+	if len(r.Asked) != 0 || len(r.Questions) != 0 {
+		t.Errorf("asked %d forms and %d questions, want none", len(r.Asked), len(r.Questions))
 	}
 	body, err := Render("mit", "Alice", 2026)
 	if err != nil {
@@ -207,7 +154,7 @@ func TestAOneShotLicenseAsksNothing(t *testing.T) {
 
 func TestTheHandlerHandsBackTheLicenceByteForByte(t *testing.T) {
 	// The bytes are the file the user saves, so nothing may be added at the edges.
-	r := &recorder{}
+	r := &coretest.Recorder{}
 	cmd := core.Command{Util: "license", Args: []string{"--mit", "--name", "Alice", "--year", "2026"},
 		Session: sessionFor(t.TempDir())}
 
@@ -216,7 +163,7 @@ func TestTheHandlerHandsBackTheLicenceByteForByte(t *testing.T) {
 	}
 
 	var got core.Result
-	if err := json.Unmarshal(r.finish, &got); err != nil {
+	if err := json.Unmarshal(r.Finished, &got); err != nil {
 		t.Fatalf("unmarshal result: %v", err)
 	}
 	body, err := Render("mit", "Alice", 2026)
@@ -236,7 +183,7 @@ func TestABadFlagIsReportedWithoutWritingToTheOutput(t *testing.T) {
 	// A flag error is a diagnostic. It has to reach the user as an error rather than
 	// appearing in the middle of whatever they were piping.
 	out := &strings.Builder{}
-	err := Run(context.Background(), sessionFor(t.TempDir()), []string{"--nonesuch"}, out, &recorder{})
+	err := Run(context.Background(), sessionFor(t.TempDir()), []string{"--nonesuch"}, out, &coretest.Recorder{})
 	if err == nil {
 		t.Fatal("an unknown flag was accepted")
 	}
@@ -281,4 +228,9 @@ func TestTheCapabilityCarriesItsCommandSurface(t *testing.T) {
 	if got := snap.Capabilities[0].State; got != registry.Available {
 		t.Errorf("state = %q (%s), want available", got, snap.Capabilities[0].Reason)
 	}
+}
+
+// sessionFor is a session on the machine running the test.
+func sessionFor(home string) core.Session {
+	return coretest.Session(home, runtime.GOOS)
 }

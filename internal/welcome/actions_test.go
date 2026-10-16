@@ -2,6 +2,7 @@ package welcome
 
 import (
 	"context"
+	"github.com/soppylzz/soppy-utils/internal/core/coretest"
 	"io"
 	"os"
 	"runtime"
@@ -125,7 +126,7 @@ func TestInstallOffersWhatIsMissing(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
 
 	home := t.TempDir()
-	r := &recorder{}
+	r := &coretest.Recorder{}
 	args := []string{"install", "--name", "Alice", "--device", "Mac",
 		"--message", "Ready", "--rc", "none"}
 
@@ -134,11 +135,12 @@ func TestInstallOffersWhatIsMissing(t *testing.T) {
 		t.Fatalf("Run: %v", err)
 	}
 
-	if r.actions == nil {
+	offer, offered := r.LastAction()
+	if !offered {
 		t.Fatal("nothing was offered although both tools are missing")
 	}
-	if !strings.Contains(r.actions.Reason, "figlet") {
-		t.Errorf("reason = %q, want it to say what is missing", r.actions.Reason)
+	if !strings.Contains(offer.Reason, "figlet") {
+		t.Errorf("reason = %q, want it to say what is missing", offer.Reason)
 	}
 
 	// The install itself still happened. A dependency that cannot be installed leaves a

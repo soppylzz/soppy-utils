@@ -2,6 +2,7 @@ package license
 
 import (
 	"context"
+	"github.com/soppylzz/soppy-utils/internal/core/coretest"
 	"io"
 	"os"
 	"path/filepath"
@@ -38,7 +39,7 @@ func TestExplicitAnswersRepairVersionConflict(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := Run(context.Background(), sessionFor(home),
-		[]string{"migrate", "--answers", answers}, io.Discard, &recorder{}); err != nil {
+		[]string{"migrate", "--answers", answers}, io.Discard, &coretest.Recorder{}); err != nil {
 		t.Fatal(err)
 	}
 	v := s.Read()

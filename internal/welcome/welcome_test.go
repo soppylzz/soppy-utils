@@ -2,6 +2,7 @@ package welcome
 
 import (
 	"context"
+	"github.com/soppylzz/soppy-utils/internal/core/coretest"
 	"io"
 	"os"
 	"os/exec"
@@ -146,7 +147,7 @@ func TestLegacyBannerMigration(t *testing.T) {
 	}
 	if err := Run(context.Background(), sessionFor(home),
 		[]string{"migrate", "--name", "Alice", "--device", "Mac", "--message", "Ready", "--rc", "bash"},
-		io.Discard, &recorder{}); err != nil {
+		io.Discard, &coretest.Recorder{}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(filepath.Join(base, "welcome.sh")); !os.IsNotExist(err) {

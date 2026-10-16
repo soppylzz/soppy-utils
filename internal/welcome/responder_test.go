@@ -3,7 +3,7 @@ package welcome
 import (
 	"context"
 	"encoding/json"
-	"errors"
+	"github.com/soppylzz/soppy-utils/internal/core/coretest"
 	"io"
 	"os"
 	"path/filepath"
@@ -11,71 +11,14 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/soppylzz/soppy-utils/internal/action"
 	"github.com/soppylzz/soppy-utils/internal/core"
-	"github.com/soppylzz/soppy-utils/internal/form"
 )
-
-// recorder stands in for a client: it remembers what a command reported and answers
-// whatever the test told it to. The tests below are the proof that the command no
-// longer reaches for a terminal of its own.
-type recorder struct {
-	canAsk  bool
-	answers map[string]any
-
-	answersConfirm bool
-	asked          *form.Spec
-	confirmed      []string
-	notices        []string
-	actions        *action.Request
-	finish         json.RawMessage
-}
-
-func (r *recorder) CanAsk() bool { return r.canAsk }
-
-func (r *recorder) Notify(message string) error {
-	r.notices = append(r.notices, message)
-	return nil
-}
-
-func (r *recorder) Ask(_ context.Context, spec form.Spec) (map[string]any, error) {
-	r.asked = &spec
-	if r.answers == nil {
-		return nil, errors.New("this test's client has nothing to answer with")
-	}
-	return r.answers, nil
-}
-
-func (r *recorder) AskActions(_ context.Context, req action.Request) (action.Outcome, error) {
-	r.actions = &req
-	return action.Outcome{Declined: true}, nil
-}
-
-func (r *recorder) Confirm(_ context.Context, question string) (bool, error) {
-	r.confirmed = append(r.confirmed, question)
-	// No by default, which is what a client with nobody to ask would answer.
-	return r.answersConfirm, nil
-}
-
-func (r *recorder) Finish(result json.RawMessage) error {
-	r.finish = result
-	return nil
-}
-
-func noticesContain(r *recorder, want string) bool {
-	for _, n := range r.notices {
-		if strings.Contains(n, want) {
-			return true
-		}
-	}
-	return false
-}
 
 func TestStatusWritesToTheWriterItWasGiven(t *testing.T) {
 	// Nothing is written anywhere else: core has no stream of its own to write to, and
 	// the client that does is the one that decided where it goes.
 	var out strings.Builder
-	if err := Run(context.Background(), sessionFor(t.TempDir()), []string{"status"}, &out, &recorder{}); err != nil {
+	if err := Run(context.Background(), sessionFor(t.TempDir()), []string{"status"}, &out, &coretest.Recorder{}); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 	if !strings.Contains(out.String(), "config contract:") {
@@ -85,20 +28,21 @@ func TestStatusWritesToTheWriterItWasGiven(t *testing.T) {
 
 func TestInstallAsksThroughTheResponderWhenAUserIsAvailable(t *testing.T) {
 	home := t.TempDir()
-	r := &recorder{canAsk: true, answers: map[string]any{
+	r := &coretest.Recorder{Askable: true, Answers: map[string]any{
 		"name": "Alice", "device": "Mac", "message": "Ready", "rc": "bash",
 	}}
 
 	if err := Run(context.Background(), sessionFor(home), []string{"install"}, io.Discard, r); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	if r.asked == nil {
+	asked, shown := r.LastAsked()
+	if !shown {
 		t.Fatal("a client that could ask was never asked")
 	}
 	// The form is the one the schema describes, so a field added to the schema appears
 	// in it without this code being touched.
-	if len(r.asked.Fields) != 5 {
-		t.Errorf("asked for %d fields, want the five the schema declares", len(r.asked.Fields))
+	if len(asked.Fields) != 5 {
+		t.Errorf("asked for %d fields, want the five the schema declares", len(asked.Fields))
 	}
 
 	script, err := os.ReadFile(scriptPath(Store(home)))
@@ -114,12 +58,12 @@ func TestANonInteractiveClientIsNotAsked(t *testing.T) {
 	// A scripted install has no terminal to answer with. Asking anyway would hang it,
 	// and today's behaviour is to fall back to documented defaults.
 	home := t.TempDir()
-	r := &recorder{canAsk: false}
+	r := &coretest.Recorder{Askable: false}
 
 	if err := Run(context.Background(), sessionFor(home), []string{"install"}, io.Discard, r); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	if r.asked != nil {
+	if _, shown := r.LastAsked(); shown {
 		t.Error("a client that cannot ask was asked anyway")
 	}
 
@@ -146,31 +90,31 @@ func TestAFutureContractIsReportedNotRepaired(t *testing.T) {
 		t.Fatalf("write config.json: %v", err)
 	}
 
-	r := &recorder{}
+	r := &coretest.Recorder{}
 	if err := Run(context.Background(), sessionFor(home), []string{"status"}, io.Discard, r); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 	// A warning is a diagnostic, so it goes through the responder rather than into the
 	// command's output, which is about to become a pipe.
-	if !noticesContain(r, "welcome") {
-		t.Errorf("notices = %v, want the conflict reported", r.notices)
+	if !r.NoticesContain("welcome") {
+		t.Errorf("notices = %v, want the conflict reported", r.Notices)
 	}
 }
 
 func TestTheHandlerHandsBackOutputRatherThanWritingIt(t *testing.T) {
-	r := &recorder{}
+	r := &coretest.Recorder{}
 	cmd := core.Command{Util: "welcome", Args: []string{"status"},
 		Session: core.Session{Home: t.TempDir()}}
 
 	if err := (Handler{}).Run(context.Background(), cmd, r); err != nil {
 		t.Fatalf("Handler.Run: %v", err)
 	}
-	if r.finish == nil {
+	if r.Finished == nil {
 		t.Fatal("the command never finished")
 	}
 
 	var got core.Result
-	if err := json.Unmarshal(r.finish, &got); err != nil {
+	if err := json.Unmarshal(r.Finished, &got); err != nil {
 		t.Fatalf("unmarshal result: %v", err)
 	}
 	if !strings.Contains(got.Output, "config contract:") {
@@ -194,7 +138,7 @@ func TestTheHandlerRunsAgainstTheSessionsHome(t *testing.T) {
 		t.Fatalf("write config.json: %v", err)
 	}
 
-	r := &recorder{}
+	r := &coretest.Recorder{}
 	cmd := core.Command{Util: "welcome", Args: []string{"status"},
 		Session: core.Session{Home: home}}
 
@@ -203,7 +147,7 @@ func TestTheHandlerRunsAgainstTheSessionsHome(t *testing.T) {
 	}
 
 	var got core.Result
-	if err := json.Unmarshal(r.finish, &got); err != nil {
+	if err := json.Unmarshal(r.Finished, &got); err != nil {
 		t.Fatalf("unmarshal result: %v", err)
 	}
 	// The config in the session's home is the one that was read; this process's own
