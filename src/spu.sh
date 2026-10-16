@@ -12,6 +12,10 @@ spu_go() {
     if command -v cygpath >/dev/null 2>&1; then
       SPU_HOME_NATIVE="$(cygpath -w "$HOME")"
       export SPU_HOME_NATIVE
+      # The same conversion for the directory the client was run from, because a command
+      # that works on a project needs a path the native daemon can open.
+      SPU_WORKDIR_NATIVE="$(cygpath -w "$PWD")"
+      export SPU_WORKDIR_NATIVE
     fi
   fi
   if [[ -x "$exe" ]]; then

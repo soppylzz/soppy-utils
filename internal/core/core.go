@@ -38,6 +38,13 @@ type Session struct {
 	// thing. Windows does, and VS Code puts its user files under it; a command that needs
 	// it cannot guess, because the location is configurable.
 	AppData string
+
+	// WorkingDir is the directory the client was run from.
+	//
+	// A command that works on a project needs to know which one, and this is the same
+	// kind of fact as the home: the daemon outlives whoever started it, so its own
+	// working directory answers a question about a process, not about this session.
+	WorkingDir string
 }
 
 // Command is one client request for core to do something.

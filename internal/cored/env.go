@@ -38,6 +38,15 @@ type Env struct {
 
 	Tmux string `json:"tmux,omitempty"`
 
+	// WorkingDir is the directory the client was run from, carried for the same reason
+	// the home is: a command that works on a project asks the session which project,
+	// and the daemon's own directory is an answer about a different process.
+	WorkingDir string `json:"workdir,omitempty"`
+
+	// WorkingDirNative is that directory spelled the way this platform's file APIs want
+	// it, for the reason HomeNative exists.
+	WorkingDirNative string `json:"workdir_native,omitempty"`
+
 	// AppData is the roaming application data directory on the platforms that have one.
 	AppData string `json:"appdata,omitempty"`
 }
@@ -48,6 +57,14 @@ func (e Env) HomeForFilesystem() string {
 		return e.HomeNative
 	}
 	return e.Home
+}
+
+// WorkingDirForFilesystem is the working directory the daemon should use for file access.
+func (e Env) WorkingDirForFilesystem() string {
+	if e.WorkingDirNative != "" {
+		return e.WorkingDirNative
+	}
+	return e.WorkingDir
 }
 
 // host builds the view a capability is judged against.

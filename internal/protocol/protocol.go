@@ -12,7 +12,13 @@ import "encoding/json"
 // Version is the protocol version this build speaks. A client and a core that do
 // not overlap refuse each other rather than guessing, because a guessed field shape
 // is worse than a restart.
-const Version = 1
+//
+// It moves when a message grows a field a peer can only get wrong by ignoring. Version
+// 2 added the client's working directory to the handshake: an older core drops it in
+// silence, and a command that works on a project is then handed no project rather than
+// being told so. Refusing costs a restart of a daemon that an upgrade was going to
+// replace anyway, which is why the recovery below it exists.
+const Version = 2
 
 // Error codes. The -326xx range is JSON-RPC's own, and describes a caller that broke
 // the protocol; the -320xx range is reserved for server errors, which is where the

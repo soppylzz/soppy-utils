@@ -530,10 +530,11 @@ func (d *Daemon) startSession(
 			Util: p.Util,
 			Args: p.Args,
 			Session: core.Session{
-				Home:    state.env.HomeForFilesystem(),
-				GOOS:    state.env.GOOS,
-				Shell:   state.env.Shell,
-				AppData: state.env.AppData,
+				Home:       state.env.HomeForFilesystem(),
+				GOOS:       state.env.GOOS,
+				Shell:      state.env.Shell,
+				AppData:    state.env.AppData,
+				WorkingDir: state.env.WorkingDirForFilesystem(),
 			},
 		}, s)
 		if err == nil && s.hasEnded() {

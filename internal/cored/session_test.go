@@ -225,3 +225,72 @@ func TestASessionCannotFinishTwice(t *testing.T) {
 		t.Errorf("a second message arrived after finish: %s %s", msg.Method, msg.Params)
 	}
 }
+
+// The daemon outlives the client that started it, so the directory a command runs in is a
+// fact about the session rather than about this process. A command that generates files
+// into a project has to know which project; the daemon's own working directory belongs to
+// whoever happened to start it, possibly several clients and several hours ago.
+func TestTheSessionCarriesTheClientsWorkingDirectory(t *testing.T) {
+	got := make(chan core.Session, 1)
+	c := startDaemon(t, Options{Handler: scriptedHandler{
+		run: func(ctx context.Context, cmd core.Command, reply core.Responder) error {
+			got <- cmd.Session
+			return reply.Finish(nil)
+		},
+	}})
+
+	reply := c.call("initialize", initParams(t, map[string]any{
+		"os":      "linux",
+		"workdir": "/home/someone/project",
+	}))
+	if reply.Error != nil {
+		t.Fatalf("initialize: %+v", reply.Error)
+	}
+	if reply := c.call("command/run", `{"util":"agent"}`); reply.Error != nil {
+		t.Fatalf("command/run: %+v", reply.Error)
+	}
+	c.await("session/finish")
+
+	select {
+	case s := <-got:
+		if s.WorkingDir != "/home/someone/project" {
+			t.Errorf("WorkingDir = %q, want %q", s.WorkingDir, "/home/someone/project")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("the handler never ran")
+	}
+}
+
+// Git Bash reports a POSIX spelling the native daemon cannot open, so the converted form
+// travels alongside it — the same arrangement the home already uses.
+func TestTheSessionPrefersTheNativeWorkingDirectory(t *testing.T) {
+	got := make(chan core.Session, 1)
+	c := startDaemon(t, Options{Handler: scriptedHandler{
+		run: func(ctx context.Context, cmd core.Command, reply core.Responder) error {
+			got <- cmd.Session
+			return reply.Finish(nil)
+		},
+	}})
+
+	reply := c.call("initialize", initParams(t, map[string]any{
+		"os":             "windows",
+		"workdir":        "/c/Users/someone/project",
+		"workdir_native": `C:\Users\someone\project`,
+	}))
+	if reply.Error != nil {
+		t.Fatalf("initialize: %+v", reply.Error)
+	}
+	if reply := c.call("command/run", `{"util":"agent"}`); reply.Error != nil {
+		t.Fatalf("command/run: %+v", reply.Error)
+	}
+	c.await("session/finish")
+
+	select {
+	case s := <-got:
+		if s.WorkingDir != `C:\Users\someone\project` {
+			t.Errorf("WorkingDir = %q, want the native spelling", s.WorkingDir)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("the handler never ran")
+	}
+}

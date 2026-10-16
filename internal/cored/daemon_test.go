@@ -3,6 +3,7 @@ package cored
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"github.com/soppylzz/soppy-utils/internal/core"
 	"net"
 	"os"
@@ -197,7 +198,7 @@ func startDaemon(t *testing.T, opts Options) *client {
 func TestInitializeReportsTheProtocolVersion(t *testing.T) {
 	c := startDaemon(t, Options{})
 
-	reply := c.call("initialize", `{"client":{"protocol_versions":[1],"env":{"os":"linux"}}}`)
+	reply := c.call("initialize", fmt.Sprintf(`{"client":{"protocol_versions":[%d],"env":{"os":"linux"}}}`, protocol.Version))
 	if reply.Error != nil {
 		t.Fatalf("initialize failed: %+v", reply.Error)
 	}
