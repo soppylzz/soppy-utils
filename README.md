@@ -65,6 +65,14 @@ spu agent status           # what is generated, missing, or changed
 spu agent edit             # answer one item's questions again
 ```
 
+`spu agent` also writes `.agents/SPU.md`, which explains what is generated and lists every generated document as an `@` reference. Reference it once from the project's instruction file:
+
+```markdown
+@.agents/SPU.md
+```
+
+Nothing generates into `AGENTS.md` or `CLAUDE.md`: those are the project's own files. Claude Code expands the `@`; Codex and Pi have no import syntax and read the line as an instruction to open that file. Nothing generated is copied into a harness directory except the single `.claude/skills` link.
+
 Do not edit a generated file. Add your own document beside it and say so in `AGENTS.md`; a document you own is never touched. Changing what a generated document says means changing the answer it came from.
 
 `spu-clone-third-party` is installed alongside `spu`. It is an MCP server that hands an agent a local checkout of a third-party package to read, so an agent reads a directory instead of making repeated web requests. A checkout whose major version matches is reused without any network access; an exact version is never fetched on its own, because pulling a pinned version without being told to is how a cache becomes a supply chain.
