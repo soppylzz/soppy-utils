@@ -96,39 +96,6 @@ func indexStep(project string, steps []Step) (Step, error) {
 	}, nil
 }
 
-// dropSection removes a whole section — its heading, its body, and the marker that ends
-// it — so a section that does not apply leaves no trace rather than an empty heading.
-//
-// The blank line before the heading is kept: it is what separates the paragraph above
-// from the heading below once the section between them is gone.
-func dropSection(body, marker string) string {
-	lines := strings.Split(body, "\n")
-	at := -1
-	for i, line := range lines {
-		if strings.Contains(line, marker) {
-			at = i
-			break
-		}
-	}
-	if at < 0 {
-		return body
-	}
-
-	start := at
-	for start > 0 && !strings.HasPrefix(lines[start], "## ") {
-		start--
-	}
-	end := at + 1
-	for end < len(lines) && strings.TrimSpace(lines[end]) == "" {
-		end++
-	}
-
-	out := make([]string, 0, len(lines))
-	out = append(out, lines[:start]...)
-	out = append(out, lines[end:]...)
-	return strings.Join(out, "\n")
-}
-
 func titleOf(it item.Item) string {
 	if it.Title != "" {
 		return it.Title

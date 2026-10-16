@@ -1,9 +1,3 @@
-// Package agent generates a project's agent-facing text.
-//
-// The work is in three separable pieces and they are kept that way: deciding what each
-// file needs is a pure function of facts (decide), producing the bytes is a pure function
-// of answers (render), and this is the part that reads the filesystem, keeps the ledger,
-// and asks whoever is there.
 package agent
 
 import (
