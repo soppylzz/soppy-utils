@@ -44,7 +44,7 @@ type session struct {
 	id           string
 	cancel       context.CancelFunc
 	conn         *clientConn
-	capabilities clientCapabilities
+	capabilities Capabilities
 
 	mu       sync.Mutex
 	ended    bool

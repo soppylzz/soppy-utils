@@ -31,6 +31,13 @@ type AttachOptions struct {
 	// judged against it, so a client that leaves it zeroed gets a core that knows
 	// nothing about the environment it is being asked about.
 	Env Env
+
+	// Kind is what sort of client this is: "tui", and later "gui".
+	Kind string
+
+	// Capabilities is what this client says it can do. Core offers work only to a
+	// client that said it can perform it.
+	Capabilities Capabilities
 }
 
 // Attach connects to a daemon, starting one if none is listening.

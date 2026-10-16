@@ -6,13 +6,13 @@ import (
 	"github.com/soppylzz/soppy-utils/internal/registry"
 )
 
-// clientCapabilities is what a client says it can do.
+// Capabilities is what a client says it can do.
 //
 // It is a negotiation rather than a courtesy. Core offers work to a client that can
 // perform it and describes the same work as a warning to one that cannot, because a
 // scripted install has no terminal to answer a question with, and asking anyway would
 // hang it.
-type clientCapabilities struct {
+type Capabilities struct {
 	ActionExecution bool `json:"action_execution"`
 	Confirm         bool `json:"confirm"`
 	Interactive     bool `json:"interactive"`

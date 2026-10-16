@@ -49,6 +49,19 @@ type Responder interface {
 	Finish(result json.RawMessage) error
 }
 
+// Result is what a command reports when it finishes.
+//
+// The command decides which stream its output belongs on rather than the client,
+// because whether output is data or a diagnostic is a fact about the command. A licence
+// body and a usage message both look like text and belong in different places.
+type Result struct {
+	// Output is text the command produced.
+	Output string `json:"output,omitempty"`
+
+	// OutputTo names the stream Output belongs on: "stdout", the default, or "stderr".
+	OutputTo string `json:"output_to,omitempty"`
+}
+
 // Handler runs commands. A util package implements its behaviour behind this seam;
 // the daemon knows nothing about what any particular util does, and a Handler knows
 // nothing about sockets or JSON-RPC.
@@ -336,7 +349,7 @@ func (d *Daemon) serveConn(ctx context.Context, raw net.Conn) {
 type connState struct {
 	conn         *clientConn
 	env          Env
-	capabilities clientCapabilities
+	capabilities Capabilities
 	initialized  bool
 
 	mu       sync.Mutex
@@ -547,11 +560,11 @@ func (d *Daemon) startSession(
 
 type initializeParams struct {
 	Client struct {
-		Kind             string             `json:"kind"`
-		Version          string             `json:"version"`
-		ProtocolVersions []int              `json:"protocol_versions"`
-		Capabilities     clientCapabilities `json:"capabilities"`
-		Env              Env                `json:"env"`
+		Kind             string       `json:"kind"`
+		Version          string       `json:"version"`
+		ProtocolVersions []int        `json:"protocol_versions"`
+		Capabilities     Capabilities `json:"capabilities"`
+		Env              Env          `json:"env"`
 	} `json:"client"`
 }
 

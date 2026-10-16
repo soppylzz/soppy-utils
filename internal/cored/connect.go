@@ -64,7 +64,7 @@ func Connect(ctx context.Context, opts AttachOptions) (*Conn, error) {
 	r := protocol.NewReader(conn)
 	w := protocol.NewWriter(conn)
 
-	info, err := handshake(r, w, opts.Env)
+	info, err := handshake(r, w, opts)
 	if err == nil {
 		return &Conn{Conn: conn, r: r, w: w, Info: info}, nil
 	}
@@ -86,7 +86,7 @@ func Connect(ctx context.Context, opts AttachOptions) (*Conn, error) {
 	r = protocol.NewReader(conn)
 	w = protocol.NewWriter(conn)
 
-	info, err = handshake(r, w, opts.Env)
+	info, err = handshake(r, w, opts)
 	if err != nil {
 		conn.Close()
 		return nil, fmt.Errorf("the restarted core still disagrees: %w", err)
@@ -94,7 +94,8 @@ func Connect(ctx context.Context, opts AttachOptions) (*Conn, error) {
 	return &Conn{Conn: conn, r: r, w: w, Info: info}, nil
 }
 
-func handshake(r *protocol.Reader, w *protocol.Writer, env Env) (Handshake, error) {
+func handshake(r *protocol.Reader, w *protocol.Writer, opts AttachOptions) (Handshake, error) {
+	env := opts.Env
 	if env.GOOS == "" {
 		// The client and the daemon are on the same machine, so this is a fact about
 		// where the client is running rather than a guess about the daemon.
@@ -102,7 +103,9 @@ func handshake(r *protocol.Reader, w *protocol.Writer, env Env) (Handshake, erro
 	}
 	params, err := json.Marshal(map[string]any{
 		"client": map[string]any{
+			"kind":              opts.Kind,
 			"protocol_versions": []int{protocol.Version},
+			"capabilities":      opts.Capabilities,
 			"env":               env,
 		},
 	})
