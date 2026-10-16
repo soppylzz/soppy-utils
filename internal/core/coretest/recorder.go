@@ -9,8 +9,6 @@ import (
 	"context"
 	"encoding/json"
 
-	"strings"
-
 	"github.com/soppylzz/soppy-utils/internal/action"
 	"github.com/soppylzz/soppy-utils/internal/core"
 	"github.com/soppylzz/soppy-utils/internal/form"
@@ -107,16 +105,6 @@ func (r *Recorder) Answer(t Reporter) core.Result {
 		t.Errorf("the command did not finish with a result: %v", err)
 	}
 	return got
-}
-
-// NoticesContain reports whether any notice mentions want.
-func (r *Recorder) NoticesContain(want string) bool {
-	for _, n := range r.Notices {
-		if strings.Contains(n, want) {
-			return true
-		}
-	}
-	return false
 }
 
 // Session is a session on the machine running the test. A test that cares which platform
