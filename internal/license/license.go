@@ -81,7 +81,7 @@ func Run(ctx context.Context, session core.Session, args []string, out io.Writer
 	s := Store(home)
 	v := s.Read()
 	if v.Warning != "" {
-		if err := reply.Notify("license: " + v.Warning); err != nil {
+		if err := reply.Warn(v.Warning); err != nil {
 			return err
 		}
 	}

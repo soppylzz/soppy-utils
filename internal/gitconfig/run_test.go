@@ -165,8 +165,8 @@ func TestAConfigWarningGoesThroughTheResponder(t *testing.T) {
 	if err := Run(context.Background(), sessionFor(home), []string{"status"}, io.Discard, r); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	if !r.NoticesContain("git") {
-		t.Errorf("notices = %v, want the conflict reported", r.Notices)
+	if len(r.Warnings) == 0 {
+		t.Errorf("notices = %v, want the conflict reported as a warning", r.Notices)
 	}
 }
 

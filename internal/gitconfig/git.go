@@ -234,7 +234,7 @@ func install(s configstore.Store, data map[string]any, reply core.Responder) err
 				return fmt.Errorf("git include: %s: %w", strings.TrimSpace(string(b)), err)
 			}
 		}
-		reply.Notify("git: installed global defaults")
+		reply.Notify("installed global defaults")
 		return nil
 	})
 }
@@ -273,7 +273,7 @@ func Run(ctx context.Context, session core.Session, args []string, out io.Writer
 	s := Store(home)
 	v := s.Read()
 	if v.Warning != "" {
-		if err := reply.Notify("git: " + v.Warning); err != nil {
+		if err := reply.Warn(v.Warning); err != nil {
 			return err
 		}
 	}

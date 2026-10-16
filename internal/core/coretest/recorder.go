@@ -41,6 +41,7 @@ type Recorder struct {
 	Asked     []form.Spec
 	Questions []string
 	Notices   []string
+	Warnings  []string
 	Actions   []action.Request
 	Finished  json.RawMessage
 }
@@ -49,6 +50,14 @@ func (r *Recorder) CanAsk() bool { return r.Askable }
 
 func (r *Recorder) Notify(message string) error {
 	r.Notices = append(r.Notices, message)
+	return nil
+}
+
+// Warn records into both, because a test that cares whether a line was reported at all
+// and one that cares how it was reported are asking different questions.
+func (r *Recorder) Warn(message string) error {
+	r.Notices = append(r.Notices, message)
+	r.Warnings = append(r.Warnings, message)
 	return nil
 }
 

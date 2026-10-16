@@ -218,11 +218,21 @@ func (s *session) CanAsk() bool { return s.capabilities.Interactive }
 
 // Notify reports progress. It is a notification rather than a request because a util
 // saying what it is doing is not asking a question.
-func (s *session) Notify(message string) error {
+func (s *session) Notify(message string) error { return s.notify("", message) }
+
+// Warn reports something the user should look at, and says so: whether a line is a
+// warning is the command's to know and the client's to render.
+func (s *session) Warn(message string) error { return s.notify("warning", message) }
+
+func (s *session) notify(level, message string) error {
 	if s.hasEnded() {
 		return fmt.Errorf("session %s has already finished", s.id)
 	}
-	payload, err := json.Marshal(map[string]any{"session_id": s.id, "message": message})
+	params := map[string]any{"session_id": s.id, "message": message}
+	if level != "" {
+		params["level"] = level
+	}
+	payload, err := json.Marshal(params)
 	if err != nil {
 		return fmt.Errorf("encode session/notify: %w", err)
 	}

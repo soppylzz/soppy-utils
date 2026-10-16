@@ -35,6 +35,10 @@ type Client struct {
 
 	// Confirm asks a yes or no question.
 	Confirm func(question string) (bool, error)
+
+	// util is what is being run, so that a diagnostic can name it the way the rest of
+	// the command line does.
+	util string
 }
 
 func New(conn *cored.Conn, in io.Reader, out, errOut io.Writer) *Client {
@@ -59,6 +63,7 @@ func (c *Client) Run(ctx context.Context, util string, args []string) (int, erro
 	if err != nil {
 		return 1, err
 	}
+	c.util = util
 	if err := c.conn.Send(protocol.NewRequest(1, "command/run", params)); err != nil {
 		return 1, err
 	}
@@ -129,13 +134,19 @@ func (c *Client) Run(ctx context.Context, util string, args []string) (int, erro
 func (c *Client) notify(params json.RawMessage) error {
 	var got struct {
 		Message string `json:"message"`
+		Level   string `json:"level,omitempty"`
 	}
 	if err := json.Unmarshal(params, &got); err != nil {
 		return fmt.Errorf("session/notify: %w", err)
 	}
+
 	// Diagnostics belong on stderr, which is the rule this project already follows: a
 	// client that wrote progress to stdout would corrupt anything being piped.
-	fmt.Fprintln(c.errOut, got.Message)
+	prefix := c.util + ": "
+	if got.Level == "warning" {
+		prefix = "warning: " + prefix
+	}
+	fmt.Fprintln(c.errOut, prefix+got.Message)
 	return nil
 }
 

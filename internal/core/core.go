@@ -50,7 +50,12 @@ type Command struct {
 // Responder is how a running command talks to the client that asked for it.
 type Responder interface {
 	// Notify reports progress. Nobody is expected to answer.
+	//
+	// Warn is the same channel with a different meaning, and the difference travels so
+	// that a client can present it as its own users expect. The wording is the command's;
+	// whether it reads as a warning is what the user is being told.
 	Notify(message string) error
+	Warn(message string) error
 
 	// Ask sends a form and waits for the values. It is how a command collects what it
 	// needs without knowing how the client will ask.

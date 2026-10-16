@@ -281,9 +281,9 @@ func install(s configstore.Store, data map[string]any, reply core.Responder) err
 		}
 		zshrc, _ := os.ReadFile(rcPath(s.Home, "zsh"))
 		if strings.Contains(string(zshrc), "$SOPPY/shell/welcome.sh") {
-			reply.Notify("welcome: legacy welcome hook remains in ~/.zshrc")
+			reply.Warn("legacy welcome hook remains in ~/.zshrc")
 		}
-		reply.Notify("welcome: generated " + scriptPath(s))
+		reply.Notify("generated " + scriptPath(s))
 		return nil
 	})
 }
@@ -326,7 +326,7 @@ func Run(ctx context.Context, session core.Session, args []string, out io.Writer
 	s := Store(home)
 	v := s.Read()
 	if v.Warning != "" {
-		if err := reply.Notify("welcome: " + v.Warning); err != nil {
+		if err := reply.Warn(v.Warning); err != nil {
 			return err
 		}
 	}

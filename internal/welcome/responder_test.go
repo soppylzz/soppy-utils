@@ -96,8 +96,8 @@ func TestAFutureContractIsReportedNotRepaired(t *testing.T) {
 	}
 	// A warning is a diagnostic, so it goes through the responder rather than into the
 	// command's output, which is about to become a pipe.
-	if !r.NoticesContain("welcome") {
-		t.Errorf("notices = %v, want the conflict reported", r.Notices)
+	if len(r.Warnings) == 0 {
+		t.Errorf("notices = %v, want the conflict reported as a warning", r.Notices)
 	}
 }
 
