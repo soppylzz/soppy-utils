@@ -38,8 +38,8 @@ import (
 // is the property the three hand-maintained lists of the previous dispatcher did not
 // have, and a test checks it.
 //
-// A util joins this list when it moves onto core. license, git, and vscode are still on
-// the direct path below, and each leaves that switch as it arrives here.
+// A util joins this list when it moves onto core. git is still on the direct path
+// below, and leaves that switch when it arrives here.
 var utils = []struct {
 	id       string
 	register func(*registry.Registry) error
