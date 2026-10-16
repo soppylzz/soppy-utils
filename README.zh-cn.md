@@ -77,6 +77,8 @@ spu 不会往 `AGENTS.md` 或 `CLAUDE.md` 里写任何东西 —— 那是项目
 
 选中某个 harness 时，`spu-clone-third-party` 也会注册到该 harness 读取的文件里：Claude Code 是项目根的 `.mcp.json`，Pi 是 `.pi/mcp.json`，Codex 是 `.codex/config.toml` 里的 `[mcp_servers.clone-third-party]`。Codex 的项目文件是它的通用配置而非专门存服务的文件，因此只在项目没有该文件时写入，否则只打印需要添加的几行。取消选中某个 harness 时，只移除 spu 自己的条目。`.agents/mcp/spu.json` 记录注册了什么、注册到了哪些 harness。
 
+Claude Code 的项目配置还会禁止写入 reference 缓存。另外两家做不到：Codex 的沙箱是白名单模型，其 glob 规则只能禁止**读**；Pi 没有内置沙箱，也不对任何操作请求批准。如果那个缓存的写权限对你重要，请隔离这两个 harness。
+
 `spu-clone-third-party` 与 `spu` 一同安装、同在 `PATH` 上，所以提交进仓库的注册在任何一个装过它的机器上都能用。它是一个 MCP 服务，把第三方包的本地检出交给 agent 阅读，让 agent 读本地目录而不是反复发网络请求。主版本号匹配的检出会被直接复用、完全不联网；具体版本绝不会被自行拉取，因为未经确认就拉取固定版本正是缓存变成供应链的方式。
 
 ## 卸载

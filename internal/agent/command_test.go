@@ -400,3 +400,47 @@ func TestNoHarnessMeansNoRegistration(t *testing.T) {
 		t.Error("the MCP record was written although no harness was chosen")
 	}
 }
+
+func TestTheCacheSectionOnlyAppearsWhenTheServerIsRegistered(t *testing.T) {
+	// Telling a project how to protect a cache it does not use is noise, and noise in the
+	// one file an agent reads is worse than elsewhere.
+	withServer := t.TempDir()
+	reply := &coretest.Recorder{Askable: true, Answers: map[string]any{
+		"items": []any{"conduct-of-go"}, "harnesses": []any{"claude"},
+	}}
+	if err := (Handler{}).Run(context.Background(), core.Command{
+		Util: "agent", Session: core.Session{GOOS: "linux", WorkingDir: withServer},
+	}, reply); err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+	body, err := os.ReadFile(filepath.Join(canonical(withServer), "SPU.md"))
+	if err != nil {
+		t.Fatalf("no index: %v", err)
+	}
+	if !strings.Contains(string(body), "reference cache") {
+		t.Errorf("the cache section is missing although the server was registered:\n%s", body)
+	}
+	if strings.Contains(string(body), "<!--") {
+		t.Errorf("a placeholder was left behind:\n%s", body)
+	}
+
+	withoutServer := t.TempDir()
+	reply = &coretest.Recorder{Askable: true, Answers: map[string]any{
+		"items": []any{"conduct-of-go"}, "harnesses": []any{},
+	}}
+	if err := (Handler{}).Run(context.Background(), core.Command{
+		Util: "agent", Session: core.Session{GOOS: "linux", WorkingDir: withoutServer},
+	}, reply); err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+	body, err = os.ReadFile(filepath.Join(canonical(withoutServer), "SPU.md"))
+	if err != nil {
+		t.Fatalf("no index: %v", err)
+	}
+	if strings.Contains(string(body), "reference cache") {
+		t.Errorf("the cache section is there although no server was registered:\n%s", body)
+	}
+	if strings.Contains(string(body), "## \n") || strings.Contains(string(body), "\n\n\n\n") {
+		t.Errorf("dropping the section left a hole:\n%s", body)
+	}
+}

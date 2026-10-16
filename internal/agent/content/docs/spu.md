@@ -41,6 +41,19 @@ becomes yours.
 - `skills/` — skills, each a directory holding a `SKILL.md`.
 - `SPU.md` — this file.
 
+## The reference cache
+
+`spu-clone-third-party` keeps third-party checkouts under `~/code/reference`, or wherever
+`SPU_REFERENCE_CACHE` points. An agent should read there and not write there.
+
+Claude Code's project settings deny editing it. **The other two cannot**: Codex's sandbox
+is an allowlist, so anything outside the working directory already needs approval and its
+glob rules only support denying reads; Pi has no built-in sandbox at all and asks for
+approval of nothing. If write access to that directory matters, isolate those two — a
+container or a dedicated account — rather than expecting a config file to do it.
+
+<!-- spu:mcp -->
+
 ## The documents
 
 <!-- spu:index -->

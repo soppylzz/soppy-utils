@@ -20,6 +20,11 @@ const indexID = "spu-index"
 // indexMarker is where the generated list goes in the prose.
 const indexMarker = "<!-- spu:index -->"
 
+// mcpMarker is where the reference-cache section goes. It is only kept when a server was
+// actually registered: a project that registered none should not be told how to protect a
+// cache it does not use.
+const mcpMarker = "<!-- spu:mcp -->"
+
 // indexStep builds SPU.md from the prose and the files this run is generating.
 //
 // It is generated rather than written as an item because its content is the selection
@@ -28,7 +33,7 @@ const indexMarker = "<!-- spu:index -->"
 //
 // It is always written when anything is chosen, and never when nothing is: a project
 // whose files were all deselected should not keep an index pointing at them.
-func indexStep(project string, steps []Step) (Step, error) {
+func indexStep(project string, steps []Step, registeredMCP bool) (Step, error) {
 	prose, err := content.SPUProse()
 	if err != nil {
 		return Step{}, err
@@ -76,6 +81,12 @@ func indexStep(project string, steps []Step) (Step, error) {
 	// Paths in the index are relative to the index, which sits beside the directories the
 	// documents are in, so an `@` resolves without the reader knowing where they are.
 	body := strings.Replace(string(prose), indexMarker, strings.TrimRight(list.String(), "\n"), 1)
+	if registeredMCP {
+		// The section stays; only the marker that placed it goes.
+		body = strings.Replace(body, "\n\n"+mcpMarker, "", 1)
+	} else {
+		body = dropSection(body, mcpMarker)
+	}
 
 	return Step{
 		Item: item.Item{
@@ -92,6 +103,39 @@ func indexStep(project string, steps []Step) (Step, error) {
 		Decision: decide.Decision{Action: decide.Write, Reason: decide.Outdated},
 		Content:  []byte(body),
 	}, nil
+}
+
+// dropSection removes a whole section — its heading, its body, and the marker that ends
+// it — so a section that does not apply leaves no trace rather than an empty heading.
+//
+// The blank line before the heading is kept: it is what separates the paragraph above
+// from the heading below once the section between them is gone.
+func dropSection(body, marker string) string {
+	lines := strings.Split(body, "\n")
+	at := -1
+	for i, line := range lines {
+		if strings.Contains(line, marker) {
+			at = i
+			break
+		}
+	}
+	if at < 0 {
+		return body
+	}
+
+	start := at
+	for start > 0 && !strings.HasPrefix(lines[start], "## ") {
+		start--
+	}
+	end := at + 1
+	for end < len(lines) && strings.TrimSpace(lines[end]) == "" {
+		end++
+	}
+
+	out := make([]string, 0, len(lines))
+	out = append(out, lines[:start]...)
+	out = append(out, lines[end:]...)
+	return strings.Join(out, "\n")
 }
 
 func titleOf(it item.Item) string {

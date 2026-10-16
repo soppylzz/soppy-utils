@@ -100,12 +100,6 @@ func generate(ctx context.Context, project string, reply core.Responder) error {
 	}
 	// The index lists what was chosen, so it is built from the choice rather than from an
 	// item: an item cannot describe a list that does not exist until the items are picked.
-	idx, err := indexStep(project, steps)
-	if err != nil {
-		return err
-	}
-	steps = append(steps, idx)
-
 	if len(harnesses) > 0 {
 		mcp, err := mcpStep(project, harnesses, mcpServers())
 		if err != nil {
@@ -113,6 +107,12 @@ func generate(ctx context.Context, project string, reply core.Responder) error {
 		}
 		steps = append(steps, mcp)
 	}
+
+	idx, err := indexStep(project, steps, len(harnesses) > 0)
+	if err != nil {
+		return err
+	}
+	steps = append(steps, idx)
 
 	next, err := Apply(ctx, project, steps, led, reply)
 	if err != nil {
