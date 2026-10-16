@@ -38,11 +38,6 @@ func helpFor(r *registry.Registry, out io.Writer) error {
 		fmt.Fprintf(out, "  %-*s  %s\n", width, c.ID, c.Title)
 	}
 
-	// The one util that is not in the registry, because it is still a Bash function that
-	// opens a file with the code command. It is named here so that it stays discoverable,
-	// and this line goes when it moves.
-	fmt.Fprintln(out)
-	fmt.Fprintln(out, "  vscode     Open VS Code configuration")
 	fmt.Fprintln(out)
 	fmt.Fprintln(out, "Run spu <util> --help for a util's own options.")
 	return nil

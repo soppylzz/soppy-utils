@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 
 spu_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)" || return 1
-source "$spu_root/src/vscode.sh"
 source "$spu_root/src/utils/style.sh"
 
 # spu_go runs the Go executable. It is both the client and, when a client cannot reach
@@ -31,10 +30,6 @@ spu() {
   # Help and version are the binary's: the list of utils lives in its registry, and a
   # copy of it here is a copy that can be wrong.
   '' | help | -h | --help | --version) spu_go "$@" ;;
-  vscode)
-    shift
-    vscode_main "$@"
-    ;;
   update)
     shift
     bash "$spu_root/scripts/update.sh" "$@"

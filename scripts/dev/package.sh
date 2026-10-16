@@ -19,7 +19,7 @@ for target in $targets; do
 
   mkdir -p "$stage/bin" "$stage/src/utils" "$stage/scripts" "$stage/libexec"
   cp "$repo_root/bin/spu" "$stage/bin/spu"
-  cp "$repo_root/src/spu.sh" "$repo_root/src/vscode.sh" "$stage/src/"
+  cp "$repo_root/src/spu.sh" "$stage/src/"
   cp "$repo_root/src/utils/style.sh" "$stage/src/utils/"
   cp "$repo_root/scripts/update.sh" "$repo_root/scripts/install.sh" "$repo_root/scripts/uninstall.sh" "$stage/scripts/"
 

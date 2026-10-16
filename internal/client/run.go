@@ -204,15 +204,14 @@ func (c *Client) performRequestedActions(ctx context.Context, sessionID string, 
 
 	var confirm func() bool
 	if c.Confirm != nil {
-		// What will run is shown before it runs. A yes-or-no question about something
-		// invisible is not a question.
-		fmt.Fprintln(c.errOut, actionPrompt(req))
 		confirm = func() bool {
 			ok, err := c.Confirm("Run this?")
 			return err == nil && ok
 		}
 	}
 
+	// performActions decides whether to ask. Only work that changes the machine is put to
+	// the user, and that is a fact about the work rather than about this client.
 	outcome := performActions(ctx, c.in, c.errOut, req, confirm)
 
 	answer, err := json.Marshal(outcome)

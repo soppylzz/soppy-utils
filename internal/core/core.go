@@ -33,6 +33,11 @@ type Session struct {
 
 	// Shell is the shell the user is in, when the client could tell.
 	Shell string
+
+	// AppData is where this platform keeps roaming application data, when it has such a
+	// thing. Windows does, and VS Code puts its user files under it; a command that needs
+	// it cannot guess, because the location is configurable.
+	AppData string
 }
 
 // Command is one client request for core to do something.

@@ -40,6 +40,14 @@ type Action struct {
 
 	// Optional says the work may be skipped without the command failing.
 	Optional bool `json:"optional,omitempty"`
+
+	// ChangesMachine says the action alters the machine rather than the command's own
+	// output. Installing a package does; opening a file in the editor does not.
+	//
+	// Core states the fact and stops there. Whether a user should be asked first is the
+	// client's business, and the two answers differ: a client asks before installing and
+	// does not ask before opening.
+	ChangesMachine bool `json:"changes_machine,omitempty"`
 }
 
 // Request is a set of actions and the reason for them.

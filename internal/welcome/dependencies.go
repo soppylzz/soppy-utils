@@ -94,7 +94,7 @@ func dependencyActions(goos string, d optionalTools) action.Request {
 	switch goos {
 	case "darwin":
 		req.Actions = append(req.Actions, action.Action{
-			Kind: action.Run, Optional: true,
+			Kind: action.Run, Optional: true, ChangesMachine: true,
 			Argv: append([]string{"brew", "install"}, packages...),
 		})
 
@@ -109,7 +109,7 @@ func dependencyActions(goos string, d optionalTools) action.Request {
 		}
 		if len(apt) > 0 {
 			req.Actions = append(req.Actions, action.Action{
-				Kind: action.Run, NeedsElevation: true, Optional: true,
+				Kind: action.Run, NeedsElevation: true, Optional: true, ChangesMachine: true,
 				Argv: append([]string{"apt-get", "install", "-y"}, apt...),
 			})
 		}

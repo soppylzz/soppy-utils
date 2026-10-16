@@ -41,12 +41,13 @@ func formAsker(answers chan map[string]any) core.Handler {
 	})
 }
 
-// actionAsker offers one harmless command and reports the outcome.
+// actionAsker offers one harmless command that changes the machine, so that the client
+// asks about it.
 func actionAsker(outcomes chan action.Outcome) core.Handler {
 	return handlerFunc(func(ctx context.Context, cmd core.Command, reply core.Responder) error {
 		outcome, err := reply.AskActions(ctx, action.Request{
 			Reason:  "welcome needs figlet",
-			Actions: []action.Action{{Kind: action.Run, Argv: []string{"true"}}},
+			Actions: []action.Action{{Kind: action.Run, Argv: []string{"true"}, ChangesMachine: true}},
 		})
 		if err != nil {
 			return err

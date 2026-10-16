@@ -2,7 +2,7 @@
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-files=("$root/.githooks/pre-commit" "$root/bin/spu" "$root/src/spu.sh" "$root/src/vscode.sh" "$root"/src/utils/*.sh "$root"/scripts/*.sh "$root"/scripts/dev/*.sh "$root"/test/*.spec.sh "$root"/test/general/*.sh)
+files=("$root/.githooks/pre-commit" "$root/bin/spu" "$root/src/spu.sh" "$root"/src/utils/*.sh "$root"/scripts/*.sh "$root"/scripts/dev/*.sh "$root"/test/*.spec.sh "$root"/test/general/*.sh)
 for file in "${files[@]}"; do bash -n "$file"; done
 
 command -v shellcheck >/dev/null 2>&1 || {

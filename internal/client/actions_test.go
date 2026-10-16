@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -207,5 +208,50 @@ func TestFetchRefusesAnOversizedDownload(t *testing.T) {
 	}
 	if _, err := os.Stat(dest); !os.IsNotExist(err) {
 		t.Errorf("an oversized download left a file at %s", dest)
+	}
+}
+
+func TestOnlyActionsThatChangeTheMachineAreApproved(t *testing.T) {
+	// Asking before opening a file in the editor would be a question nobody wants, and
+	// not asking before installing a package would be a question somebody does.
+	asked := false
+	prompt := func() bool { asked = true; return true }
+
+	opening := action.Request{Actions: []action.Action{
+		{Kind: action.Run, Argv: []string{"true"}},
+	}}
+	if outcome := performActions(context.Background(), strings.NewReader(""), io.Discard, opening, prompt); !outcome.Complete() {
+		t.Errorf("outcome = %+v, want the action performed", outcome)
+	}
+	if asked {
+		t.Error("the client asked before doing something that changes nothing")
+	}
+
+	asked = false
+	installing := action.Request{Actions: []action.Action{
+		{Kind: action.Run, Argv: []string{"true"}, ChangesMachine: true},
+	}}
+	if outcome := performActions(context.Background(), strings.NewReader(""), io.Discard, installing, prompt); !outcome.Complete() {
+		t.Errorf("outcome = %+v, want the action performed", outcome)
+	}
+	if !asked {
+		t.Error("the client installed something without asking")
+	}
+}
+
+func TestWorkThatChangesTheMachineIsNotDoneWithoutBeingAsked(t *testing.T) {
+	// A scripted run has nobody to ask. Installing a package without an answer is not
+	// the safe default, so it is declined and the command carries on degraded.
+	out := &strings.Builder{}
+	outcome := performActions(context.Background(), strings.NewReader(""), out,
+		action.Request{Actions: []action.Action{
+			{Kind: action.Run, Argv: []string{"true"}, ChangesMachine: true},
+		}}, nil)
+
+	if !outcome.Declined {
+		t.Errorf("outcome = %+v, want it declined", outcome)
+	}
+	if outcome.Performed != 0 {
+		t.Error("something ran although nobody could approve it")
 	}
 }

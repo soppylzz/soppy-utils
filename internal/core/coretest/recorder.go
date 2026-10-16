@@ -33,6 +33,10 @@ type Recorder struct {
 	// Confirms is consumed one per question. Running out means no.
 	Confirms []bool
 
+	// ActionOutcome, when set, is what AskActions answers. Left nil it declines, which is
+	// what a client with nobody to ask answers.
+	ActionOutcome *action.Outcome
+
 	// What the command did, recorded.
 	Asked     []form.Spec
 	Questions []string
@@ -58,6 +62,9 @@ func (r *Recorder) Ask(_ context.Context, spec form.Spec) (map[string]any, error
 
 func (r *Recorder) AskActions(_ context.Context, req action.Request) (action.Outcome, error) {
 	r.Actions = append(r.Actions, req)
+	if r.ActionOutcome != nil {
+		return *r.ActionOutcome, nil
+	}
 	return action.Outcome{Declined: true}, nil
 }
 

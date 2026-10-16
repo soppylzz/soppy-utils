@@ -37,6 +37,9 @@ type Env struct {
 	HomeNative string `json:"home_native,omitempty"`
 
 	Tmux string `json:"tmux,omitempty"`
+
+	// AppData is the roaming application data directory on the platforms that have one.
+	AppData string `json:"appdata,omitempty"`
 }
 
 // HomeForFilesystem is the home the daemon should use for file checks.

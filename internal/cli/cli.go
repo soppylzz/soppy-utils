@@ -28,6 +28,7 @@ import (
 	"github.com/soppylzz/soppy-utils/internal/license"
 	"github.com/soppylzz/soppy-utils/internal/registry"
 	"github.com/soppylzz/soppy-utils/internal/transport"
+	"github.com/soppylzz/soppy-utils/internal/vscode"
 	"github.com/soppylzz/soppy-utils/internal/welcome"
 )
 
@@ -48,6 +49,7 @@ var utils = []struct {
 	{id: "welcome", register: welcome.Register, handler: welcome.Handler{}},
 	{id: "license", register: license.Register, handler: license.Handler{}},
 	{id: "git", register: gitconfig.Register, handler: gitconfig.Handler{}},
+	{id: "vscode", register: vscode.Register, handler: vscode.Handler{}},
 }
 
 // Main runs one invocation and returns the status the process should exit with.
@@ -220,7 +222,11 @@ func runThroughCore(home string, args []string) (int, error) {
 		Budget:   5 * time.Second,
 		Kind:     "tui",
 		Capabilities: cored.Capabilities{
-			ActionExecution: interactive,
+			// The client can always run a program: that is what a shell is. What it
+			// cannot always do is ask, and the two are different questions — a script
+			// that runs spu can open a file in the editor, it just cannot be asked
+			// whether it wants a package installed.
+			ActionExecution: true,
 			Confirm:         interactive,
 			Interactive:     interactive,
 		},
@@ -233,6 +239,7 @@ func runThroughCore(home string, args []string) (int, error) {
 			Home:       os.Getenv("HOME"),
 			HomeNative: os.Getenv("SPU_HOME_NATIVE"),
 			Tmux:       os.Getenv("TMUX"),
+			AppData:    os.Getenv("APPDATA"),
 		},
 	})
 	if err != nil {

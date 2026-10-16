@@ -2,6 +2,7 @@ package action
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 )
 
@@ -39,5 +40,30 @@ func TestOutcomeIsCompleteOnlyWhenEverythingWorked(t *testing.T) {
 		if got := tc.out.Complete(); got != tc.want {
 			t.Errorf("%s: Complete() = %v, want %v", tc.name, got, tc.want)
 		}
+	}
+}
+
+func TestAnActionSaysWhetherItChangesTheMachine(t *testing.T) {
+	// A client asks before installing a package and does not ask before opening a file.
+	// Which of the two it is has to travel with the action: core knows what the command
+	// is doing, and the client knows what its own users expect to be asked about.
+	installing := Action{Kind: Run, Argv: []string{"apt-get", "install", "-y", "figlet"},
+		NeedsElevation: true, ChangesMachine: true}
+	opening := Action{Kind: Run, Argv: []string{"code", "/home/u/.config/Code/User/settings.json"}}
+
+	body, err := json.Marshal(installing)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if !strings.Contains(string(body), `"changes_machine":true`) {
+		t.Errorf("an installing action does not say it changes the machine: %s", body)
+	}
+
+	body, err = json.Marshal(opening)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if strings.Contains(string(body), "changes_machine") {
+		t.Errorf("an action that only opens something claims to change the machine: %s", body)
 	}
 }

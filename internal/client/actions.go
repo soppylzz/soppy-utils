@@ -35,6 +35,17 @@ func commandFor(a action.Action) (string, []string, error) {
 	return a.Argv[0], a.Argv[1:], nil
 }
 
+// changesTheMachine reports whether an offer would change anything outside the command's
+// own output. That is what a client puts to its user; opening a file is not.
+func changesTheMachine(req action.Request) bool {
+	for _, a := range req.Actions {
+		if a.ChangesMachine {
+			return true
+		}
+	}
+	return false
+}
+
 // performActions carries out what core asked for and reports what became of it.
 //
 // Every action is attempted even after one fails, and each failure is reported
@@ -44,10 +55,26 @@ func performActions(
 	ctx context.Context, in io.Reader, out io.Writer, req action.Request, confirm func() bool,
 ) action.Outcome {
 	var outcome action.Outcome
-
-	if len(req.Actions) > 0 && confirm != nil && !confirm() {
-		outcome.Declined = true
+	if len(req.Actions) == 0 {
 		return outcome
+	}
+
+	// Only work that changes the machine is put to the user. What will run is shown
+	// first, because a yes-or-no question about something invisible is not a question —
+	// and opening a file in an editor is not something to be asked about at all.
+	if changesTheMachine(req) {
+		if confirm == nil {
+			// Nobody can be asked, and this is the kind of work that must not proceed
+			// without an answer. Declining is the safe reading of "nobody could be
+			// asked", and it leaves the command degraded rather than wrong.
+			outcome.Declined = true
+			return outcome
+		}
+		fmt.Fprintln(out, actionPrompt(req))
+		if !confirm() {
+			outcome.Declined = true
+			return outcome
+		}
 	}
 
 	for _, a := range req.Actions {

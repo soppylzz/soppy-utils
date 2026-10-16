@@ -6,7 +6,7 @@ Read the current code and tests before changing behavior. Files in `.soppy/plans
 
 ## Overview
 
-`soppy-utils` exposes one `spu <util> [...args]` command. The public launcher, installer, updater, and VS Code integration use Bash 3.2. The utils run in a Go core that the command starts on demand and talks to over a socket; end users do not need Go. Release packages target Apple Silicon Macs, Ubuntu 24.04 LTS on amd64, and Windows 10/11 Git Bash on amd64.
+`soppy-utils` exposes one `spu <util> [...args]` command. The public launcher, installer, and updater use Bash 3.2. Every util runs in a Go core that the command starts on demand and talks to over a socket; end users do not need Go. Release packages target Apple Silicon Macs, Ubuntu 24.04 LTS on amd64, and Windows 10/11 Git Bash on amd64.
 
 ## Language and format
 
@@ -15,12 +15,12 @@ Write code comments, commit messages, requirement documents, and the English REA
 ## Layout
 
 - `bin/spu`: thin Bash launcher.
-- `src/spu.sh`, `src/vscode.sh`, `src/utils/style.sh`: Bash runtime.
+- `src/spu.sh`, `src/utils/style.sh`: the launcher's dispatcher and its presentation helpers.
 - `cmd/spu`: the one executable. It is a client, and the core daemon it starts when it cannot reach one.
 - `internal/clioutput`: shared Go CLI diagnostics on stderr.
 - `internal/configstore`: per-util `VERSION`, JSON config, schema validation, and in-memory defaults.
-- `internal/{license,welcome,gitconfig}`: util-specific CLI, forms, templates, rendering, and ownership rules.
-- `internal/ui`: terminal checks and Huh form setup.
+- `internal/{welcome,license,gitconfig,vscode}`: util-specific behaviour, form and action descriptions, templates, and ownership rules.
+- `internal/{protocol,transport,registry,form,action,core,cored,client,cli}`: the core and the clients that talk to it.
 - `Taskfile.yml`: go-task entry point for development, build, and CI commands.
 - `.githooks/pre-commit`: optional staged-snapshot quality gate.
 - `scripts/`: installation, update, and uninstall scripts shipped in release archives.
