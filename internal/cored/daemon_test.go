@@ -81,10 +81,17 @@ func (c *client) call(method string, params string) protocol.Incoming {
 	}
 }
 
-// startDaemon binds a daemon on a private endpoint, serves it in the background, and
-// returns a connected client. The daemon is stopped and the socket removed on
-// cleanup, so no test leaves a process or a file behind.
-func startDaemon(t *testing.T, opts Options) *client {
+// harness owns a daemon bound to a private endpoint, so a test can watch when Serve
+// returns rather than only talking to it.
+type harness struct {
+	t        *testing.T
+	ep       transport.Endpoint
+	daemon   *Daemon
+	done     chan struct{}
+	serveErr error
+}
+
+func newHarness(t *testing.T, opts Options) *harness {
 	t.Helper()
 
 	root, err := os.MkdirTemp("/tmp", "spu")
@@ -108,36 +115,57 @@ func startDaemon(t *testing.T, opts Options) *client {
 	if opts.IdleTimeout == 0 {
 		opts.IdleTimeout = time.Minute
 	}
+	if opts.DrainGrace == 0 {
+		opts.DrainGrace = time.Second
+	}
 
 	d, err := New(opts)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
 
+	h := &harness{t: t, ep: ep, daemon: d, done: make(chan struct{})}
 	ctx, cancel := context.WithCancel(context.Background())
-	served := make(chan struct{})
 	go func() {
-		defer close(served)
-		if err := d.Serve(ctx); err != nil {
-			t.Errorf("Serve: %v", err)
-		}
+		h.serveErr = d.Serve(ctx)
+		close(h.done)
 	}()
 	t.Cleanup(func() {
 		cancel()
-		select {
-		case <-served:
-		case <-time.After(5 * time.Second):
-			t.Error("Serve did not return after the context was cancelled")
+		h.waitServed(5 * time.Second)
+		if h.serveErr != nil {
+			t.Errorf("Serve: %v", h.serveErr)
 		}
 	})
+	return h
+}
 
-	conn, err := transport.Dial(ep)
-	if err != nil {
-		t.Fatalf("Dial: %v", err)
+// waitServed blocks until Serve returns. It is safe to call more than once, and from
+// a test as well as from cleanup.
+func (h *harness) waitServed(timeout time.Duration) {
+	h.t.Helper()
+	select {
+	case <-h.done:
+	case <-time.After(timeout):
+		h.t.Fatal("Serve did not return")
 	}
-	t.Cleanup(func() { conn.Close() })
+}
 
-	return &client{t: t, ep: ep, conn: conn, r: protocol.NewReader(conn), w: protocol.NewWriter(conn)}
+func (h *harness) dial() *client {
+	h.t.Helper()
+	conn, err := transport.Dial(h.ep)
+	if err != nil {
+		h.t.Fatalf("Dial: %v", err)
+	}
+	h.t.Cleanup(func() { conn.Close() })
+	return &client{t: h.t, ep: h.ep, conn: conn,
+		r: protocol.NewReader(conn), w: protocol.NewWriter(conn)}
+}
+
+// startDaemon is the common case: a harness with one connected client.
+func startDaemon(t *testing.T, opts Options) *client {
+	t.Helper()
+	return newHarness(t, opts).dial()
 }
 
 func TestInitializeReportsTheProtocolVersion(t *testing.T) {

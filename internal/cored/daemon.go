@@ -43,11 +43,19 @@ type Handler interface {
 
 // Options configures a Daemon.
 type Options struct {
-	Endpoint    transport.Endpoint
-	Handler     Handler
-	Version     string
+	Endpoint transport.Endpoint
+	Handler  Handler
+	Version  string
+
+	// IdleTimeout is how long the daemon stays resident with nobody connected. Zero
+	// or negative means never exit on idle.
 	IdleTimeout time.Duration
-	Log         io.Writer
+
+	// DrainGrace bounds how long a shutdown waits for running sessions. A session that
+	// overruns it is abandoned: spu update is waiting on this, and so is the user.
+	DrainGrace time.Duration
+
+	Log io.Writer
 }
 
 // Daemon serves clients on one endpoint.
@@ -60,6 +68,17 @@ type Daemon struct {
 	// sessionSeq names sessions within this daemon's lifetime. Ids only have to be
 	// unique among the sessions a client can currently see.
 	sessionSeq atomic.Uint64
+
+	draining  chan struct{}
+	drainOnce sync.Once
+
+	mu        sync.Mutex
+	conns     map[*clientConn]struct{}
+	idleSince time.Time
+
+	// inflight counts running sessions across every connection, which is what a
+	// shutdown waits for.
+	inflight sync.WaitGroup
 }
 
 // New binds the endpoint. Binding here rather than in Serve means a daemon that loses
@@ -74,7 +93,79 @@ func New(opts Options) (*Daemon, error) {
 	if log == nil {
 		log = io.Discard
 	}
-	return &Daemon{opts: opts, ln: ln, log: log}, nil
+	return &Daemon{
+		opts:     opts,
+		ln:       ln,
+		log:      log,
+		draining: make(chan struct{}),
+		conns:    make(map[*clientConn]struct{}),
+	}, nil
+}
+
+// requestDrain asks Serve to stop. It is safe to call from more than one connection
+// and more than once.
+func (d *Daemon) requestDrain() {
+	d.drainOnce.Do(func() { close(d.draining) })
+}
+
+// drain stops accepting, tells the clients that are still attached, and waits a
+// bounded time for running sessions.
+//
+// Connected clients are told so they can reconnect to the replacement rather than
+// failing on their next request; a session is waited for because it may be halfway
+// through writing configuration, and stopping it there would leave the user with a
+// half-applied change and nobody to tell them.
+func (d *Daemon) drain() {
+	d.ln.Close()
+
+	d.mu.Lock()
+	attached := make([]*clientConn, 0, len(d.conns))
+	for c := range d.conns {
+		attached = append(attached, c)
+	}
+	d.mu.Unlock()
+	for _, c := range attached {
+		_ = c.write(protocol.NewNotification("server/draining", nil))
+	}
+
+	done := make(chan struct{})
+	go func() {
+		d.inflight.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(d.opts.DrainGrace):
+		d.logf("drain: a session did not finish within %s", d.opts.DrainGrace)
+	}
+}
+
+func (d *Daemon) registerConn(c *clientConn) {
+	d.mu.Lock()
+	d.conns[c] = struct{}{}
+	d.idleSince = time.Time{}
+	d.mu.Unlock()
+}
+
+func (d *Daemon) releaseConn(c *clientConn) {
+	d.mu.Lock()
+	delete(d.conns, c)
+	if len(d.conns) == 0 {
+		d.idleSince = time.Now()
+	}
+	d.mu.Unlock()
+}
+
+// idleFor is how long nobody has been connected. A daemon that has never had a client
+// is idle from the moment it started, so a spawn that never gets a connection does not
+// stay resident forever.
+func (d *Daemon) idleFor() time.Duration {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.idleSince.IsZero() {
+		return 0
+	}
+	return time.Since(d.idleSince)
 }
 
 // Serve accepts clients until the context is cancelled, a client asks core to stop,
@@ -90,19 +181,44 @@ func (d *Daemon) Serve(ctx context.Context) error {
 		d.wg.Wait()  // let them finish before this returns
 	}()
 
+	d.mu.Lock()
+	d.idleSince = time.Now()
+	d.mu.Unlock()
+
 	conns := make(chan net.Conn)
 	acceptErr := make(chan error, 1)
 	go d.accept(ctx, conns, acceptErr)
 
+	// Poll rather than arm and re-arm a timer on every connection change. The check is
+	// a comparison, and while it matters the daemon is idle by definition, so the cost
+	// is one wake-up per interval and nothing else.
+	poll := time.Second
+	if d.opts.IdleTimeout > 0 {
+		poll = d.opts.IdleTimeout / 4
+		if poll < 10*time.Millisecond {
+			poll = 10 * time.Millisecond
+		}
+	}
+	ticker := time.NewTicker(poll)
+	defer ticker.Stop()
+
 	for {
 		select {
 		case <-ctx.Done():
+			return nil
+		case <-d.draining:
+			d.drain()
 			return nil
 		case err := <-acceptErr:
 			if errors.Is(err, net.ErrClosed) {
 				return nil
 			}
 			return err
+		case <-ticker.C:
+			if d.opts.IdleTimeout > 0 && d.idleFor() >= d.opts.IdleTimeout {
+				d.logf("idle for %s; exiting", d.opts.IdleTimeout)
+				return nil
+			}
 		case conn := <-conns:
 			d.wg.Add(1)
 			go func() {
@@ -138,6 +254,8 @@ func (d *Daemon) serveConn(ctx context.Context, raw net.Conn) {
 	defer raw.Close()
 
 	conn := newClientConn(raw)
+	d.registerConn(conn)
+	defer d.releaseConn(conn)
 
 	sessCtx, cancelSessions := context.WithCancel(ctx)
 	var sessions sync.WaitGroup
@@ -185,6 +303,12 @@ func (d *Daemon) serveConn(ctx context.Context, raw net.Conn) {
 		if err := conn.write(reply); err != nil {
 			return
 		}
+
+		if msg.Method == "server/shutdown" {
+			// Only after the reply is on the wire. Draining closes this connection, and
+			// the client that asked for the shutdown is waiting for an answer on it.
+			d.requestDrain()
+		}
 	}
 }
 
@@ -196,6 +320,8 @@ func (d *Daemon) dispatch(
 		return d.initialize(msg.Params)
 	case "command/run":
 		return d.startSession(ctx, conn, sessions, msg.Params)
+	case "server/shutdown":
+		return json.RawMessage(`{}`), nil
 	default:
 		return nil, &protocol.Error{
 			Code:    protocol.CodeMethodNotFound,
@@ -241,7 +367,9 @@ func (d *Daemon) startSession(
 	}
 
 	sessions.Add(1)
+	d.inflight.Add(1)
 	go func() {
+		defer d.inflight.Done()
 		defer sessions.Done()
 		defer cancel()
 
