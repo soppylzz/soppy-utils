@@ -8,14 +8,15 @@ import (
 	"time"
 
 	"github.com/soppylzz/soppy-utils/internal/action"
+	"github.com/soppylzz/soppy-utils/internal/core"
 	"github.com/soppylzz/soppy-utils/internal/cored"
 	"github.com/soppylzz/soppy-utils/internal/form"
 	"github.com/soppylzz/soppy-utils/internal/transport"
 )
 
 // notifying finishes successfully after one progress line.
-func notifying(message string) cored.Handler {
-	return handlerFunc(func(ctx context.Context, cmd cored.Command, reply cored.Responder) error {
+func notifying(message string) core.Handler {
+	return handlerFunc(func(ctx context.Context, cmd core.Command, reply core.Responder) error {
 		if err := reply.Notify(message); err != nil {
 			return err
 		}
@@ -24,8 +25,8 @@ func notifying(message string) cored.Handler {
 }
 
 // formAsker asks one question and reports what came back.
-func formAsker(answers chan map[string]any) cored.Handler {
-	return handlerFunc(func(ctx context.Context, cmd cored.Command, reply cored.Responder) error {
+func formAsker(answers chan map[string]any) core.Handler {
+	return handlerFunc(func(ctx context.Context, cmd core.Command, reply core.Responder) error {
 		values, err := reply.Ask(ctx, form.Spec{
 			Title:  "Welcome banner",
 			Fields: []form.Field{{Key: "name", Type: form.String, Title: "Name"}},
@@ -41,8 +42,8 @@ func formAsker(answers chan map[string]any) cored.Handler {
 }
 
 // actionAsker offers one harmless command and reports the outcome.
-func actionAsker(outcomes chan action.Outcome) cored.Handler {
-	return handlerFunc(func(ctx context.Context, cmd cored.Command, reply cored.Responder) error {
+func actionAsker(outcomes chan action.Outcome) core.Handler {
+	return handlerFunc(func(ctx context.Context, cmd core.Command, reply core.Responder) error {
 		outcome, err := reply.AskActions(ctx, action.Request{
 			Reason:  "welcome needs figlet",
 			Actions: []action.Action{{Kind: action.Run, Argv: []string{"true"}}},
@@ -57,17 +58,17 @@ func actionAsker(outcomes chan action.Outcome) cored.Handler {
 	})
 }
 
-func failing(message string) cored.Handler {
-	return handlerFunc(func(ctx context.Context, cmd cored.Command, reply cored.Responder) error {
+func failing(message string) core.Handler {
+	return handlerFunc(func(ctx context.Context, cmd core.Command, reply core.Responder) error {
 		return errorString(message)
 	})
 }
 
-func emitting(text string) cored.Handler { return emittingTo(text, "stdout") }
+func emitting(text string) core.Handler { return emittingTo(text, "stdout") }
 
-func emittingTo(text, stream string) cored.Handler {
-	return handlerFunc(func(ctx context.Context, cmd cored.Command, reply cored.Responder) error {
-		body, err := json.Marshal(cored.Result{Output: text, OutputTo: stream})
+func emittingTo(text, stream string) core.Handler {
+	return handlerFunc(func(ctx context.Context, cmd core.Command, reply core.Responder) error {
+		body, err := json.Marshal(core.Result{Output: text, OutputTo: stream})
 		if err != nil {
 			return err
 		}
@@ -75,9 +76,9 @@ func emittingTo(text, stream string) cored.Handler {
 	})
 }
 
-type handlerFunc func(context.Context, cored.Command, cored.Responder) error
+type handlerFunc func(context.Context, core.Command, core.Responder) error
 
-func (f handlerFunc) Run(ctx context.Context, cmd cored.Command, reply cored.Responder) error {
+func (f handlerFunc) Run(ctx context.Context, cmd core.Command, reply core.Responder) error {
 	return f(ctx, cmd, reply)
 }
 

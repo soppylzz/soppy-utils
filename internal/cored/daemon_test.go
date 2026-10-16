@@ -3,6 +3,7 @@ package cored
 import (
 	"context"
 	"encoding/json"
+	"github.com/soppylzz/soppy-utils/internal/core"
 	"net"
 	"os"
 	"testing"
@@ -15,7 +16,7 @@ import (
 // nopHandler accepts every command and finishes without doing anything.
 type nopHandler struct{}
 
-func (nopHandler) Run(ctx context.Context, cmd Command, reply Responder) error {
+func (nopHandler) Run(ctx context.Context, cmd core.Command, reply core.Responder) error {
 	return reply.Finish(nil)
 }
 

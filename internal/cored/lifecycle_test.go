@@ -2,6 +2,7 @@ package cored
 
 import (
 	"context"
+	"github.com/soppylzz/soppy-utils/internal/core"
 	"testing"
 	"time"
 
@@ -30,7 +31,7 @@ func TestShutdownWaitsForARunningSession(t *testing.T) {
 
 	h := newHarness(t, Options{
 		DrainGrace: 2 * time.Second,
-		Handler: scriptedHandler{run: func(ctx context.Context, cmd Command, reply Responder) error {
+		Handler: scriptedHandler{run: func(ctx context.Context, cmd core.Command, reply core.Responder) error {
 			<-release
 			err := reply.Finish(nil)
 			close(finished)
@@ -71,7 +72,7 @@ func TestShutdownDoesNotWaitForever(t *testing.T) {
 	// waiting on this, and so is the user.
 	h := newHarness(t, Options{
 		DrainGrace: 100 * time.Millisecond,
-		Handler: scriptedHandler{run: func(ctx context.Context, cmd Command, reply Responder) error {
+		Handler: scriptedHandler{run: func(ctx context.Context, cmd core.Command, reply core.Responder) error {
 			<-ctx.Done()
 			return ctx.Err()
 		}},

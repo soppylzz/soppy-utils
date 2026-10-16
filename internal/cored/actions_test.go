@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/soppylzz/soppy-utils/internal/core"
 	"strings"
 	"testing"
 	"time"
@@ -63,7 +64,7 @@ func (c *client) withActionExecution() {
 func TestACommandCanOfferActionsToTheClient(t *testing.T) {
 	seen := make(chan action.Outcome, 1)
 	c := startDaemon(t, Options{Handler: scriptedHandler{
-		run: func(ctx context.Context, cmd Command, reply Responder) error {
+		run: func(ctx context.Context, cmd core.Command, reply core.Responder) error {
 			outcome, err := reply.AskActions(ctx, action.Request{
 				Reason: "welcome needs figlet",
 				Actions: []action.Action{{
@@ -112,7 +113,7 @@ func TestACommandCanOfferActionsToTheClient(t *testing.T) {
 func TestACommandSeesWhichActionsFailed(t *testing.T) {
 	seen := make(chan action.Outcome, 1)
 	c := startDaemon(t, Options{Handler: scriptedHandler{
-		run: func(ctx context.Context, cmd Command, reply Responder) error {
+		run: func(ctx context.Context, cmd core.Command, reply core.Responder) error {
 			outcome, err := reply.AskActions(ctx, action.Request{
 				Actions: []action.Action{{Kind: action.Run, Argv: []string{"apt-get", "install", "figlet"}}},
 			})
@@ -149,7 +150,7 @@ func TestActionsAreNotOfferedToAClientThatCannotRunThem(t *testing.T) {
 	// command still has to finish.
 	seen := make(chan action.Outcome, 1)
 	c := startDaemon(t, Options{Handler: scriptedHandler{
-		run: func(ctx context.Context, cmd Command, reply Responder) error {
+		run: func(ctx context.Context, cmd core.Command, reply core.Responder) error {
 			outcome, err := reply.AskActions(ctx, action.Request{
 				Reason:  "welcome needs figlet",
 				Actions: []action.Action{{Kind: action.Run, Argv: []string{"brew", "install", "figlet"}}},

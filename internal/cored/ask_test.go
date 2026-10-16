@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/soppylzz/soppy-utils/internal/core"
 	"strings"
 	"testing"
 	"time"
@@ -60,7 +61,7 @@ func (c *client) answer(requestID int64, sessionID, values string) {
 
 func TestACommandCanAskTheClientForInput(t *testing.T) {
 	c := startDaemon(t, Options{Handler: scriptedHandler{
-		run: func(ctx context.Context, cmd Command, reply Responder) error {
+		run: func(ctx context.Context, cmd core.Command, reply core.Responder) error {
 			values, err := reply.Ask(ctx, form.Spec{
 				Title: "Welcome banner",
 				Fields: []form.Field{
@@ -102,7 +103,7 @@ func TestAnAnswerGoesToTheSessionThatAskedForIt(t *testing.T) {
 	// name alongside the value, so a swap is visible rather than merely unlikely.
 	seen := make(chan string, 2)
 	c := startDaemon(t, Options{Handler: scriptedHandler{
-		run: func(ctx context.Context, cmd Command, reply Responder) error {
+		run: func(ctx context.Context, cmd core.Command, reply core.Responder) error {
 			values, err := reply.Ask(ctx, form.Spec{
 				Fields: []form.Field{{Key: "which", Type: form.String}},
 			})
@@ -138,7 +139,7 @@ func TestAnAnswerGoesToTheSessionThatAskedForIt(t *testing.T) {
 func TestAskEndsWhenTheClientDisconnects(t *testing.T) {
 	done := make(chan error, 1)
 	c := startDaemon(t, Options{Handler: scriptedHandler{
-		run: func(ctx context.Context, cmd Command, reply Responder) error {
+		run: func(ctx context.Context, cmd core.Command, reply core.Responder) error {
 			_, err := reply.Ask(ctx, form.Spec{
 				Fields: []form.Field{{Key: "name", Type: form.String}},
 			})
@@ -166,7 +167,7 @@ func TestAskEndsWhenTheClientDisconnects(t *testing.T) {
 func TestTheClientCanCancelASession(t *testing.T) {
 	cancelled := make(chan struct{})
 	c := startDaemon(t, Options{Handler: scriptedHandler{
-		run: func(ctx context.Context, cmd Command, reply Responder) error {
+		run: func(ctx context.Context, cmd core.Command, reply core.Responder) error {
 			<-ctx.Done()
 			close(cancelled)
 			return ctx.Err()

@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/soppylzz/soppy-utils/internal/action"
+	"github.com/soppylzz/soppy-utils/internal/core"
 	"github.com/soppylzz/soppy-utils/internal/cored"
 	"github.com/soppylzz/soppy-utils/internal/form"
 	"github.com/soppylzz/soppy-utils/internal/protocol"
@@ -218,8 +219,8 @@ func (c *Client) respond(sessionID string, requestID int64, answer json.RawMessa
 
 func (c *Client) finish(params json.RawMessage) (int, error) {
 	var got struct {
-		Result cored.Result `json:"result"`
-		Error  string       `json:"error"`
+		Result core.Result `json:"result"`
+		Error  string      `json:"error"`
 	}
 	if err := json.Unmarshal(params, &got); err != nil {
 		return 1, fmt.Errorf("session/finish: %w", err)

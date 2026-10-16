@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/soppylzz/soppy-utils/internal/core"
 	"strings"
 	"testing"
 	"time"
@@ -14,10 +15,10 @@ import (
 // scriptedHandler runs a function, so a test can describe what a util does without
 // there being a util.
 type scriptedHandler struct {
-	run func(ctx context.Context, cmd Command, reply Responder) error
+	run func(ctx context.Context, cmd core.Command, reply core.Responder) error
 }
 
-func (h scriptedHandler) Run(ctx context.Context, cmd Command, reply Responder) error {
+func (h scriptedHandler) Run(ctx context.Context, cmd core.Command, reply core.Responder) error {
 	return h.run(ctx, cmd, reply)
 }
 
@@ -80,7 +81,7 @@ func (c *client) startSession(util string) string {
 
 func TestACommandRunsInASession(t *testing.T) {
 	c := startDaemon(t, Options{Handler: scriptedHandler{
-		run: func(ctx context.Context, cmd Command, reply Responder) error {
+		run: func(ctx context.Context, cmd core.Command, reply core.Responder) error {
 			if err := reply.Notify("checking configuration"); err != nil {
 				return err
 			}
@@ -118,9 +119,9 @@ func TestACommandRunsInASession(t *testing.T) {
 }
 
 func TestTheHandlerReceivesTheCommand(t *testing.T) {
-	got := make(chan Command, 1)
+	got := make(chan core.Command, 1)
 	c := startDaemon(t, Options{Handler: scriptedHandler{
-		run: func(ctx context.Context, cmd Command, reply Responder) error {
+		run: func(ctx context.Context, cmd core.Command, reply core.Responder) error {
 			got <- cmd
 			return reply.Finish(nil)
 		},
@@ -142,7 +143,7 @@ func TestTheHandlerReceivesTheCommand(t *testing.T) {
 func TestAClientDisconnectCancelsItsSession(t *testing.T) {
 	cancelled := make(chan struct{})
 	c := startDaemon(t, Options{Handler: scriptedHandler{
-		run: func(ctx context.Context, cmd Command, reply Responder) error {
+		run: func(ctx context.Context, cmd core.Command, reply core.Responder) error {
 			<-ctx.Done()
 			close(cancelled)
 			return ctx.Err()
@@ -163,7 +164,7 @@ func TestAClientDisconnectCancelsItsSession(t *testing.T) {
 
 func TestSessionsOnTwoConnectionsAreIndependent(t *testing.T) {
 	c1 := startDaemon(t, Options{Handler: scriptedHandler{
-		run: func(ctx context.Context, cmd Command, reply Responder) error {
+		run: func(ctx context.Context, cmd core.Command, reply core.Responder) error {
 			return reply.Finish(json.RawMessage(`{"util":"` + cmd.Util + `"}`))
 		},
 	}})
@@ -190,7 +191,7 @@ func TestAHandlerErrorStillEndsTheSession(t *testing.T) {
 	// A handler that fails and returns without finishing would leave the client
 	// waiting on a session that is never going to speak again.
 	c := startDaemon(t, Options{Handler: scriptedHandler{
-		run: func(ctx context.Context, cmd Command, reply Responder) error {
+		run: func(ctx context.Context, cmd core.Command, reply core.Responder) error {
 			return errors.New("figlet is missing")
 		},
 	}})
@@ -205,7 +206,7 @@ func TestAHandlerErrorStillEndsTheSession(t *testing.T) {
 
 func TestASessionCannotFinishTwice(t *testing.T) {
 	c := startDaemon(t, Options{Handler: scriptedHandler{
-		run: func(ctx context.Context, cmd Command, reply Responder) error {
+		run: func(ctx context.Context, cmd core.Command, reply core.Responder) error {
 			if err := reply.Finish(nil); err != nil {
 				return err
 			}
