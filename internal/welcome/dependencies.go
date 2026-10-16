@@ -17,8 +17,8 @@ type optionalTools struct {
 }
 
 func detectOptionalTools(home string) optionalTools {
-	_, figletErr := exec.LookPath("figlet")
-	_, fastfetchErr := exec.LookPath("fastfetch")
+	_, figletErr := exec.LookPath(toolFiglet)
+	_, fastfetchErr := exec.LookPath(toolFastfetch)
 	font := func(name string) bool {
 		f, err := os.Open(filepath.Join(home, ".figlet", "fonts", name))
 		if err != nil {
@@ -30,8 +30,8 @@ func detectOptionalTools(home string) optionalTools {
 	}
 	return optionalTools{
 		figlet:    figletErr == nil,
-		speedFont: font("speed.flf"),
-		slantFont: font("smslant.flf"),
+		speedFont: font(speedFontFile),
+		slantFont: font(slantFontFile),
 		fastfetch: fastfetchErr == nil,
 	}
 }
