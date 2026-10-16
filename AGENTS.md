@@ -2,7 +2,7 @@
 
 This file is the shared guidance for agents working in this repository. Harness-specific configuration belongs in `CLAUDE.md` or `.claude/`.
 
-Read the current code and tests before changing behavior. Files in `plan/` record requirements and earlier designs; older plans may describe the retired Zsh implementation. Preserve unrelated work already present in the tree, and commit only when the user requests it.
+Read the current code and tests before changing behavior. Files in `.soppy/plans/` record requirements and earlier designs: each opens with a status note, `.soppy/README.md` indexes them, and designs for the retired Zsh implementation sit under `plans/archive/`. That directory is excluded from Git by the global exclude file, so plans exist only on the machine that wrote them. Preserve unrelated work already present in the tree, and commit only when the user requests it.
 
 ## Overview
 
@@ -26,7 +26,7 @@ Write code comments, commit messages, requirement documents, and the English REA
 - `scripts/`: installation, update, and uninstall scripts shipped in release archives.
 - `scripts/dev/`: development, hook setup, test, version, and release packaging scripts excluded from release archives.
 - `test/`: Bash `*.spec.sh` files and shared assertions in `test/general/`.
-- `plan/`: requirement documents.
+- `.soppy/plans/`: requirement and design documents. Not tracked; `**/.soppy/` is in the global Git exclude file, so this is absent from a clone.
 
 The public Git command is `spu git`; `spu git-custom-ini` is not an alias. The managed Git include file keeps its previous path, `~/.config/soppy-utils/git-custom-ini.gitconfig`.
 
@@ -56,6 +56,10 @@ Keep the English and Chinese README examples aligned with actual CLI behavior. V
 
 Use Conventional Commits: `type(scope)?: description`. Keep descriptions lowercase, imperative, and under about 72 characters. Supported types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, and `revert`. Mark breaking changes with `!` or a `BREAKING CHANGE:` footer.
 
-## Requirement workflow
+## Requirement and design documents
 
-Skills under `.agents/skills/<name>/SKILL.md` implement `v-demand`, `v-plan`, and `v-patch`. Claude Code discovers them through `.claude/skills`, a symlink to `../.agents/skills`. Each workflow updates the matching checklist in `plan/*.md` as steps finish. Add shared guidance here; keep `CLAUDE.md` as a thin shim and `.claude/settings.json` for harness settings only.
+Requirement and design documents live in `.soppy/plans/`, one file per topic. Each keeps a `## Demands` section stating the requirement and a `## Plans` checklist that is updated as steps finish.
+
+The directory is outside version control, so a document is local to the machine that wrote it: it has no history, does not appear in review, and is missing from a clone. Anything that must outlive this machine or reach another person belongs in `AGENTS.md`, the README files, or the code itself.
+
+There is no skills-driven requirement workflow. Guidance shared by all agents belongs here; keep `CLAUDE.md` as a thin shim and `.claude/settings.json` for harness settings only.
