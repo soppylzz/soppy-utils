@@ -1,6 +1,9 @@
 package transport
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // The endpoint is derived rather than searched for, so that a client can never
 // attach to somebody else's daemon by accident and two clients can never disagree
@@ -99,5 +102,34 @@ func TestResolveRejectsARelativeHome(t *testing.T) {
 func TestResolveRejectsAnUnknownPlatform(t *testing.T) {
 	if _, err := Resolve("plan9", "/home/u", ""); err == nil {
 		t.Fatal("Resolve accepted an unknown platform, want error")
+	}
+}
+
+func TestResolveRejectsAUnixAddressThatCannotFit(t *testing.T) {
+	// The kernel caps a Unix socket path at about 104 bytes, and bind fails with a
+	// message that says nothing about which of the caller's choices was too long.
+	// Failing here instead names the limit and the way out.
+	deep := "/tmp/" + strings.Repeat("nested/", 20) + "home"
+	if _, err := Resolve("linux", deep, ""); err == nil {
+		t.Fatal("Resolve accepted a home whose socket path cannot fit, want an error")
+	}
+}
+
+func TestResolveRejectsAnOverlongOverride(t *testing.T) {
+	if _, err := Resolve("linux", "/tmp/u", "/tmp/"+strings.Repeat("x", 200)); err == nil {
+		t.Fatal("Resolve accepted an over-long override, want an error")
+	}
+}
+
+func TestAShortOverrideRescuesADeepHome(t *testing.T) {
+	// The override is the way out, and it must stay one: a home too deep to hold a
+	// socket is still usable when the endpoint is pointed somewhere shorter.
+	deep := "/tmp/" + strings.Repeat("nested/", 20) + "home"
+	got, err := Resolve("linux", deep, "/tmp/spu.sock")
+	if err != nil {
+		t.Fatalf("Resolve with an override: %v", err)
+	}
+	if got.Address != "/tmp/spu.sock" {
+		t.Errorf("Address = %q, want the override", got.Address)
 	}
 }

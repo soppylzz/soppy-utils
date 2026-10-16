@@ -13,6 +13,14 @@ import (
 	"strings"
 )
 
+// maxUnixPath bounds a Unix socket path.
+//
+// The kernel's sun_path is 104 bytes on macOS and 108 on Linux including the
+// terminator, so the path itself is capped at 103 characters there. The smaller bound
+// is used everywhere so that a path is never accepted on one platform and rejected on
+// another, and so that the limit is the same in a test as in production.
+const maxUnixPath = 103
+
 // Network names the kind of endpoint an address refers to.
 const (
 	NetworkUnix = "unix"
@@ -47,6 +55,16 @@ func Resolve(goos, home, override string) (Endpoint, error) {
 		address := override
 		if address == "" {
 			address = filepath.Join(home, ".config", "soppy-utils", "core.sock")
+		}
+		// Checked on the chosen address rather than on the home, so that a home too
+		// deep to hold a socket stays usable when the endpoint is pointed elsewhere.
+		// Without this the caller gets a bind failure that says nothing about which of
+		// its choices was too long.
+		if len(address) > maxUnixPath {
+			return Endpoint{}, fmt.Errorf(
+				"endpoint %s is %d bytes, over the %d byte limit for a Unix socket; "+
+					"point SPU_CORE_ENDPOINT at a shorter path",
+				address, len(address), maxUnixPath)
 		}
 		return Endpoint{Network: NetworkUnix, Address: address}, nil
 
