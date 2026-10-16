@@ -1,6 +1,8 @@
 package license
 
 import (
+	"context"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -35,7 +37,8 @@ func TestExplicitAnswersRepairVersionConflict(t *testing.T) {
 	if err := os.WriteFile(answers, raw, 0600); err != nil {
 		t.Fatal(err)
 	}
-	if err := Run(home, []string{"migrate", "--answers", answers}); err != nil {
+	if err := Run(context.Background(), sessionFor(home),
+		[]string{"migrate", "--answers", answers}, io.Discard, &recorder{}); err != nil {
 		t.Fatal(err)
 	}
 	v := s.Read()

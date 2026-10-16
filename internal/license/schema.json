@@ -6,6 +6,29 @@
     "schema_version",
     "data"
   ],
+  "x-spu-ui": {
+    "title": "License defaults",
+    "order": [
+      "type",
+      "author",
+      "output"
+    ],
+    "fields": {
+      "type": {
+        "title": "Preferred license",
+        "options": {
+          "mit": "MIT",
+          "isc": "ISC"
+        }
+      },
+      "author": {
+        "title": "Default author"
+      },
+      "output": {
+        "title": "Default output path"
+      }
+    }
+  },
   "properties": {
     "util": {
       "const": "license"

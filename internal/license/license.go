@@ -2,10 +2,12 @@ package license
 
 import (
 	"bytes"
+	"context"
 	"embed"
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,11 +16,10 @@ import (
 	"text/template"
 	"time"
 
-	"charm.land/huh/v2"
-	"github.com/soppylzz/soppy-utils/internal/clioutput"
 	"github.com/soppylzz/soppy-utils/internal/configstore"
+	"github.com/soppylzz/soppy-utils/internal/core"
+	"github.com/soppylzz/soppy-utils/internal/form"
 	"github.com/soppylzz/soppy-utils/internal/managedfile"
-	"github.com/soppylzz/soppy-utils/internal/ui"
 )
 
 //go:embed schema.json schema-v0.json templates/*.tmpl
@@ -70,11 +71,19 @@ func savePreferences(s configstore.Store, data map[string]any) error {
 	return managedfile.WithLock(s.Dir(), func() error { return s.Save(data) })
 }
 
-func Run(home string, args []string) error {
+// Run performs one license command.
+//
+// It writes what it wants shown and asks through reply; it never touches a terminal
+// itself. The licence body goes to out verbatim, because those bytes are the file the
+// user saves.
+func Run(ctx context.Context, session core.Session, args []string, out io.Writer, reply core.Responder) error {
+	home := session.Home
 	s := Store(home)
 	v := s.Read()
 	if v.Warning != "" {
-		clioutput.Warn("license", v.Warning)
+		if err := reply.Notify("license: " + v.Warning); err != nil {
+			return err
+		}
 	}
 	if len(args) > 0 {
 		switch args[0] {
@@ -95,17 +104,20 @@ func Run(home string, args []string) error {
 				return nil
 			})
 		case "--help":
-			fmt.Println("Usage: spu license [--mit|--isc] [--name NAME] [--year YEAR] [--output FILE]\n       spu license edit|migrate [--answers FILE]")
+			fmt.Fprintln(out, "Usage: spu license [--mit|--isc] [--name NAME] [--year YEAR] [--output FILE]\n       spu license edit|migrate [--answers FILE]")
 			return nil
 		case "-h":
-			fmt.Println("license: generate an MIT or ISC license")
+			fmt.Fprintln(out, "license: generate an MIT or ISC license")
 			return nil
 		case "edit", "migrate":
-			return edit(s, v, args)
+			return edit(ctx, s, v, args, reply)
 		}
 	}
 	fs := flag.NewFlagSet("license", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
+	// The message belongs on the client's stderr, and it gets there as the returned
+	// error. Writing it here would put it in the daemon's log instead, where the user
+	// cannot see it.
+	fs.SetOutput(io.Discard)
 	mit := fs.Bool("mit", false, "")
 	isc := fs.Bool("isc", false, "")
 	M := fs.Bool("M", false, "")
@@ -132,11 +144,13 @@ func Run(home string, args []string) error {
 		kind = "isc"
 	}
 	if kind == "" || *interactive {
-		if !ui.Available() {
+		// Whether a terminal is attached is a fact about the client, and core runs
+		// detached without one.
+		if !reply.CanAsk() {
 			if *interactive {
 				return errors.New("interactive terminal required")
 			}
-			fmt.Println("Usage: spu license --mit|--isc [--name NAME] [--year YEAR] [--output FILE]")
+			fmt.Fprintln(out, "Usage: spu license --mit|--isc [--name NAME] [--year YEAR] [--output FILE]")
 			return nil
 		}
 		if !v.Writable {
@@ -155,43 +169,60 @@ func Run(home string, args []string) error {
 			*output = v.Data["output"].(string)
 		}
 		yearText := strconv.Itoa(*year)
-		save := false
-		err := ui.Run(huh.NewGroup(
-			huh.NewSelect[string]().Title("License").Options(huh.NewOption("MIT", "mit"), huh.NewOption("ISC", "isc")).Value(&kind),
-			huh.NewInput().Title("Author").Value(name).Validate(func(s string) error {
-				if strings.TrimSpace(s) == "" {
-					return errors.New("author required")
-				}
-				return nil
-			}),
-			huh.NewInput().Title("Year").Value(&yearText).Validate(func(s string) error {
-				n, e := strconv.Atoi(s)
-				if e != nil || n < 1000 || n > 9999 {
-					return errors.New("use a four-digit year")
-				}
-				return nil
-			}),
-			huh.NewInput().Title("Output file").Value(output),
-			huh.NewConfirm().Title("Save these defaults?").Value(&save),
-		))
+		spec, err := createForm(s, map[string]any{
+			"type": kind, "author": *name, "output": *output,
+			"year": yearText, "save_defaults": false,
+		})
 		if err != nil {
 			return err
 		}
-		clioutput.Note(fmt.Sprintf("Generate %s license for %s (%s) at %s", strings.ToUpper(kind), *name, yearText, *output))
-		confirm := false
-		if err := ui.Run(huh.NewGroup(huh.NewConfirm().Title("Generate license?").Value(&confirm))); err != nil {
+		answered, err := reply.Ask(ctx, spec)
+		if err != nil {
 			return err
 		}
-		if !confirm {
+
+		if got, ok := answered["type"].(string); ok {
+			kind = got
+		}
+		if got, ok := answered["author"].(string); ok {
+			*name = strings.TrimSpace(got)
+		}
+		if got, ok := answered["output"].(string); ok {
+			*output = got
+		}
+		if got, ok := answered["year"].(string); ok {
+			yearText = got
+		}
+		save, _ := answered["save_defaults"].(bool)
+
+		if *name == "" {
+			return errors.New("author required")
+		}
+		// A client can check that the answer is four characters wide; whether it is a
+		// year is core's to decide, and the answer is not taken on trust.
+		n, err := strconv.Atoi(yearText)
+		if err != nil || n < 1000 || n > 9999 {
+			return errors.New("use a four-digit year")
+		}
+		*year = n
+
+		// The summary is the question rather than a line beside it: what is about to be
+		// written is what the user is being asked to approve.
+		confirmed, err := reply.Confirm(ctx, fmt.Sprintf("Generate %s license for %s (%d) at %s?",
+			strings.ToUpper(kind), *name, *year, *output))
+		if err != nil {
+			return err
+		}
+		if !confirmed {
 			return nil
 		}
-		*year, _ = strconv.Atoi(yearText)
+
 		if *output == "" {
 			return errors.New("output file is required")
 		}
 		if _, err := os.Stat(*output); err == nil {
-			replace := false
-			if err := ui.Run(huh.NewGroup(huh.NewConfirm().Title("Replace existing file?").Value(&replace))); err != nil {
+			replace, err := reply.Confirm(ctx, *output+" already exists. Replace it?")
+			if err != nil {
 				return err
 			}
 			if !replace {
@@ -216,13 +247,13 @@ func Run(home string, args []string) error {
 		return err
 	}
 	if *output == "" {
-		_, err = os.Stdout.Write(body)
+		_, err = out.Write(body)
 		return err
 	}
 	return configstore.AtomicWrite(*output, body, 0644)
 }
 
-func edit(s configstore.Store, v configstore.View, args []string) error {
+func edit(ctx context.Context, s configstore.Store, v configstore.View, args []string, reply core.Responder) error {
 	if !v.Writable {
 		if len(args) == 3 && args[0] == "migrate" && args[1] == "--answers" {
 			data, err := s.LoadAnswers(args[2])
@@ -234,6 +265,7 @@ func edit(s configstore.Store, v configstore.View, args []string) error {
 		return errors.New("cannot migrate conflicted or future config")
 	}
 	fs := flag.NewFlagSet("license edit", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
 	answers := fs.String("answers", "", "")
 	if err := fs.Parse(args[1:]); err != nil {
 		return err
@@ -252,23 +284,79 @@ func edit(s configstore.Store, v configstore.View, args []string) error {
 	if name == "" {
 		name = author()
 	}
-	if !ui.Available() {
+	if !reply.CanAsk() {
+		// A migration has nothing to ask: the stored shape already says everything the
+		// new one does.
 		if args[0] == "migrate" {
 			return savePreferences(s, data)
 		}
 		return errors.New("interactive terminal required")
 	}
-	err := ui.Run(huh.NewGroup(
-		huh.NewSelect[string]().Title("Preferred license").Options(huh.NewOption("MIT", "mit"), huh.NewOption("ISC", "isc")).Value(&kind),
-		huh.NewInput().Title("Default author").Value(&name),
-		huh.NewInput().Title("Default output path").Value(&output),
-	))
+
+	// The edit form is the stored preferences and nothing else, so it is a plain
+	// projection of the schema.
+	spec, err := form.FromSchema(s.Schema, map[string]any{
+		"type": kind, "author": name, "output": output,
+	})
 	if err != nil {
 		return err
+	}
+	answered, err := reply.Ask(ctx, spec)
+	if err != nil {
+		return err
+	}
+
+	if got, ok := answered["type"].(string); ok {
+		kind = got
+	}
+	if got, ok := answered["author"].(string); ok {
+		name = got
+	}
+	if got, ok := answered["output"].(string); ok {
+		output = got
 	}
 	if output == "" {
 		return errors.New("output path required")
 	}
 	data = map[string]any{"type": kind, "author": name, "output": filepath.Clean(output)}
 	return savePreferences(s, data)
+}
+
+// createForm describes what a licence needs.
+//
+// The three stored preferences are projected from the schema, exactly as the edit form
+// is. Two fields are added that are not configuration: the year, resolved per
+// invocation because a stored one would be wrong next January, and whether to keep the
+// answers as the new defaults.
+func createForm(s configstore.Store, values map[string]any) (form.Spec, error) {
+	spec, err := form.FromSchema(s.Schema, values)
+	if err != nil {
+		return form.Spec{}, err
+	}
+	spec.Title = "Generate a license"
+
+	// The schema describes stored preferences, so its titles read as defaults. Here the
+	// same fields are being chosen, not configured.
+	createTitles := map[string]string{
+		"type": "License", "author": "Author", "output": "Output file",
+	}
+	fields := make([]form.Field, 0, len(spec.Fields)+2)
+	for _, f := range spec.Fields {
+		if title, ok := createTitles[f.Key]; ok {
+			f.Title = title
+		}
+		fields = append(fields, f)
+		if f.Key == "author" {
+			fields = append(fields, form.Field{
+				Key: "year", Type: form.String, Title: "Year",
+				Value: values["year"], MinLength: 4, MaxLength: 4,
+			})
+		}
+	}
+	fields = append(fields, form.Field{
+		Key: "save_defaults", Type: form.Boolean,
+		Title: "Save these as the defaults", Value: values["save_defaults"],
+	})
+	spec.Fields = fields
+	return spec, nil
 }

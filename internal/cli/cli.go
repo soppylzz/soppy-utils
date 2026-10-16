@@ -46,6 +46,7 @@ var utils = []struct {
 	handler  core.Handler
 }{
 	{id: "welcome", register: welcome.Register, handler: welcome.Handler{}},
+	{id: "license", register: license.Register, handler: license.Handler{}},
 }
 
 // Main runs one invocation and returns the status the process should exit with.
@@ -80,21 +81,30 @@ func run(args []string, version string) (int, error) {
 		welcome.Version = version
 		return 0, serve(home, version)
 
-	case "welcome":
-		return runThroughCore(home, args)
-
-	case "license", "git":
-		// Not moved onto core yet. Slice 2 takes them, and these branches go with them.
-		if args[0] == "license" {
-			return 0, license.Run(home, args[1:])
-		}
-		return 0, gitconfig.Run(home, args[1:])
-
 	case "config-status":
 		return 0, configStatus(home)
+
+	case "git":
+		// Not moved onto core yet. Slice 2 takes it, and this branch goes with it.
+		return 0, gitconfig.Run(home, args[1:])
 	}
 
-	return 1, fmt.Errorf("unknown command %q", args[0])
+	// Everything core knows about goes to core. Asking the same list the registry is
+	// built from means a util a client can see is a util that can be run, and neither
+	// list can drift from the other.
+	if known(args[0]) {
+		return runThroughCore(home, args)
+	}
+	return 1, fmt.Errorf("unknown util %q", args[0])
+}
+
+func known(id string) bool {
+	for _, u := range utils {
+		if u.id == id {
+			return true
+		}
+	}
+	return false
 }
 
 func serve(home, version string) error {
