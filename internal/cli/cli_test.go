@@ -1,4 +1,4 @@
-package main
+package cli
 
 import (
 	"testing"
@@ -45,5 +45,17 @@ func TestEveryDispatchableUtilIsRegistered(t *testing.T) {
 		if _, ok := r.Lookup(u.id); !ok {
 			t.Errorf("%s has a handler but no capability, so no client can find it", u.id)
 		}
+	}
+}
+
+func TestMissingCommandIsReported(t *testing.T) {
+	if _, err := run(nil, "test"); err == nil {
+		t.Fatal("run accepted no command, want an error")
+	}
+}
+
+func TestAnUnknownCommandIsReportedByName(t *testing.T) {
+	if _, err := run([]string{"nonesuch"}, "test"); err == nil {
+		t.Fatal("run accepted an unknown command, want an error")
 	}
 }
