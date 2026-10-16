@@ -2,7 +2,7 @@
 
 This file is the shared guidance for agents working in this repository. Harness-specific configuration belongs in `CLAUDE.md` or `.claude/`.
 
-Read the current code and tests before changing behavior. Files in `.soppy/plans/` record requirements and earlier designs: each opens with a status note, `.soppy/README.md` indexes them, and designs for the retired implementations sit under `plans/archive/`. That directory is excluded from Git by the global exclude file, so plans exist only on the machine that wrote them. Preserve unrelated work already present in the tree, and commit only when the user requests it.
+Read the current code and tests before changing behavior. Files in `.soppy/plans/` record requirements and earlier designs: each opens with a status note and `.soppy/README.md` indexes them. That directory is excluded from Git by the global exclude file, so plans exist only on the machine that wrote them; it holds the current design and not the retired ones, which are in Git history under `plan/`. Preserve unrelated work already present in the tree, and commit only when the user requests it.
 
 ## Overview
 

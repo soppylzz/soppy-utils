@@ -89,7 +89,7 @@ CI runs macOS arm64 smoke tests on macOS 15, Ubuntu x64 tests on 24.04 LTS, and 
 
 `gofmt` ships with the Go toolchain, while `shfmt` is installed separately (usually in `$(go env GOPATH)/bin`). Both only need to be on `PATH`.
 
-The optional pre-commit hook checks the staged snapshot with the same format and lint gate as CI. It does not edit files or stage changes. Run `task format` and stage its changes before committing. `task hooks:uninstall` removes the repository-local hook setting; installation leaves existing Git hooks untouched. CI checks every push and pull request, and the release workflow repeats the quality gate before tagging. The underlying `scripts/dev/` commands remain available for the hook and direct use. Release archives contain only the installer, updater, and uninstaller from `scripts/`.
+The optional pre-commit hook checks the staged snapshot with the same format and lint gate as CI. It does not edit files or stage changes. Run `task format` and stage its changes before committing. `task hooks:uninstall` removes the repository-local hook setting; installation leaves existing Git hooks untouched. CI checks every push and pull request. A release is dispatched by hand on `main` with a choice of automatic or forced bump; the workflow repeats the quality gate, then builds and validates every archive before it tags. The underlying `scripts/dev/` commands remain available for the hook and direct use. Release archives contain only the installer, updater, and uninstaller from `scripts/`.
 
 ## License
 

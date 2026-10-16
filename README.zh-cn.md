@@ -89,7 +89,7 @@ CI 在 macOS 15 上测试 macOS arm64，在 Ubuntu 24.04 LTS 上测试 Linux x64
 
 `gofmt` 随 Go 工具链提供，`shfmt` 需要单独安装（通常位于 `$(go env GOPATH)/bin`）。两者只需都在 `PATH` 中即可。
 
-可选的 pre-commit hook 会对暂存区快照执行与 CI 相同的格式和 lint 检查，不会修改文件或自动暂存。提交前运行 `task format` 并暂存结果。`task hooks:uninstall` 会移除本仓库的 hook 设置；安装命令不会覆盖已有的 Git hooks。CI 检查每次 push 和 pull request，发布流程也会在打标签前重复质量检查。底层 `scripts/dev/` 命令仍供 hook 和直接调用使用。发布压缩包只包含 `scripts/` 下的安装、更新和卸载脚本。
+可选的 pre-commit hook 会对暂存区快照执行与 CI 相同的格式和 lint 检查，不会修改文件或自动暂存。提交前运行 `task format` 并暂存结果。`task hooks:uninstall` 会移除本仓库的 hook 设置；安装命令不会覆盖已有的 Git hooks。CI 检查每次 push 和 pull request。发布需在 `main` 上手动触发并选择自动或强制递增；发布流程会重跑质量检查，然后构建并校验全部压缩包，最后才打标签。底层 `scripts/dev/` 命令仍供 hook 和直接调用使用。发布压缩包只包含 `scripts/` 下的安装、更新和卸载脚本。
 
 ## 许可证
 
