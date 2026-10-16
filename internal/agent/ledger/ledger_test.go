@@ -163,3 +163,39 @@ func write(t *testing.T, dir, body string) {
 		t.Fatalf("WriteFile: %v", err)
 	}
 }
+
+func TestTheLedgerIsWrittenInTheDocumentedSpelling(t *testing.T) {
+	// The file is a contract: the design says `path` and `sha256`, and a struct without
+	// tags marshals as `Path` and `SHA256`. Nothing fails when that happens — the file
+	// simply says something other than what it is documented to say.
+	dir := t.TempDir()
+	led := Ledger{Version: CurrentVersion, Items: []Item{{
+		ID: "a", ItemVersion: 1,
+		Outputs: []Output{{Path: "prompts/a.md", SHA256: "abc"}},
+	}}}
+	if err := led.Write(dir); err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+	body, err := os.ReadFile(filepath.Join(dir, FileName))
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	for _, want := range []string{`"path"`, `"sha256"`, `"item_version"`} {
+		if !strings.Contains(string(body), want) {
+			t.Errorf("the ledger does not spell %s:\n%s", want, body)
+		}
+	}
+	for _, unwanted := range []string{`"Path"`, `"SHA256"`, `"ItemVersion"`} {
+		if strings.Contains(string(body), unwanted) {
+			t.Errorf("the ledger spells a field %s:\n%s", unwanted, body)
+		}
+	}
+
+	back, err := Read(dir)
+	if err != nil {
+		t.Fatalf("Read: %v", err)
+	}
+	if hash, ok := back.Items[0].HashOf("prompts/a.md"); !ok || hash != "abc" {
+		t.Errorf("the ledger does not read back what it wrote: %q %v", hash, ok)
+	}
+}

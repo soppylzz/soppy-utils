@@ -46,19 +46,23 @@ type Ledger struct {
 }
 
 // Item is one generated item and the answers it was generated from.
+//
+// The tags are the file's contract rather than a convenience. Without them a struct
+// marshals as `ItemVersion`, which reads differently from `item_version` beside it and
+// silently disagrees with what the design documents.
 type Item struct {
-	ID          string
-	ItemVersion int
-	Answers     map[string]any
-	Outputs     []Output
+	ID          string         `json:"id"`
+	ItemVersion int            `json:"item_version"`
+	Answers     map[string]any `json:"answers,omitempty"`
+	Outputs     []Output       `json:"outputs,omitempty"`
 
 	extra map[string]json.RawMessage
 }
 
 // Output is one file an item wrote, and the hash of what was written.
 type Output struct {
-	Path   string
-	SHA256 string
+	Path   string `json:"path"`
+	SHA256 string `json:"sha256"`
 }
 
 // Find returns a recorded item.
