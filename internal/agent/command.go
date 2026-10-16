@@ -146,6 +146,18 @@ func generate(ctx context.Context, project, home string, args []string, reply co
 	}
 	next.Harnesses = harnesses
 
+	// Saying what stopped being tracked. Choosing is authoritative, so an item left out of
+	// the selection is handed over — and its file stays where it is, which leaves a
+	// document in the project that nothing reads and nothing explains.
+	recorded := make([]string, 0, len(led.Items))
+	for _, it := range led.Items {
+		recorded = append(recorded, it.ID)
+	}
+	for _, id := range missing(recorded, chosen) {
+		_ = reply.Notify(fmt.Sprintf("%s is no longer tracked; whatever it generated is "+
+			"still there and is now yours", id))
+	}
+
 	// The record is written before the links and the base configuration, because the files
 	// are the part that must not be lost. A link that fails afterwards is reported; a
 	// ledger that was never written would make the next run treat its own files as

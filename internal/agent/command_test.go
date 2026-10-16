@@ -794,3 +794,29 @@ func runIn(t *testing.T, dir, home string, reply core.Responder, args ...string)
 		Session: core.Session{Home: home, GOOS: "linux", WorkingDir: dir},
 	}, reply)
 }
+
+func TestDroppingAnItemSaysSo(t *testing.T) {
+	// Choosing is authoritative, so an item left out is handed over — and its file stays.
+	// Leaving that unsaid puts a document in a project that nothing reads and nothing
+	// explains, which is what a reader of the project then has to work out for themselves.
+	project := t.TempDir()
+	if err := run(t, project, &coretest.Recorder{}, "--items", "conduct-of-go,conduct-of-docs"); err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+
+	reply := &coretest.Recorder{}
+	if err := run(t, project, reply, "--items", "conduct-of-go"); err != nil {
+		t.Fatalf("second generate: %v", err)
+	}
+	said := strings.Join(reply.Notices, "\n")
+	if !strings.Contains(said, "conduct-of-docs") {
+		t.Errorf("nothing said that an item stopped being tracked:\n%s", said)
+	}
+	if !strings.Contains(said, "still there") {
+		t.Errorf("nothing said what happened to the file:\n%s", said)
+	}
+	// The file really is still there, which is what the message claims.
+	if _, err := os.Stat(filepath.Join(canonical(project), "prompts", "conduct-of-docs.md")); err != nil {
+		t.Errorf("the file was removed although the message says it stays: %v", err)
+	}
+}
