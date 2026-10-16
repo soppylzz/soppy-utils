@@ -31,6 +31,10 @@ type client struct {
 	conn net.Conn
 	r    *protocol.Reader
 	w    *protocol.Writer
+
+	// initialized records that this connection has handshaken. Every session method
+	// needs the environment that arrives with the handshake.
+	initialized bool
 }
 
 // dial opens a second connection to the same daemon, which is how a test asks what
@@ -171,7 +175,7 @@ func startDaemon(t *testing.T, opts Options) *client {
 func TestInitializeReportsTheProtocolVersion(t *testing.T) {
 	c := startDaemon(t, Options{})
 
-	reply := c.call("initialize", `{"client":{"protocol_versions":[1]}}`)
+	reply := c.call("initialize", `{"client":{"protocol_versions":[1],"env":{"os":"linux"}}}`)
 	if reply.Error != nil {
 		t.Fatalf("initialize failed: %+v", reply.Error)
 	}

@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/soppylzz/soppy-utils/internal/protocol"
+	"github.com/soppylzz/soppy-utils/internal/registry"
 	"github.com/soppylzz/soppy-utils/internal/transport"
 )
 
@@ -54,6 +55,10 @@ type Options struct {
 	// DrainGrace bounds how long a shutdown waits for running sessions. A session that
 	// overruns it is abandoned: spu update is waiting on this, and so is the user.
 	DrainGrace time.Duration
+
+	// Registry is what core can do. Nil means nothing is registered, which is how a
+	// daemon starts before any util has moved onto it.
+	Registry *registry.Registry
 
 	Log io.Writer
 }
@@ -256,6 +261,7 @@ func (d *Daemon) serveConn(ctx context.Context, raw net.Conn) {
 	conn := newClientConn(raw)
 	d.registerConn(conn)
 	defer d.releaseConn(conn)
+	state := &connState{conn: conn}
 
 	sessCtx, cancelSessions := context.WithCancel(ctx)
 	var sessions sync.WaitGroup
@@ -295,7 +301,7 @@ func (d *Daemon) serveConn(ctx context.Context, raw net.Conn) {
 			continue
 		}
 
-		result, rpcErr := d.dispatch(sessCtx, conn, &sessions, msg)
+		result, rpcErr := d.dispatch(sessCtx, state, &sessions, msg)
 		reply := protocol.NewResult(*msg.ID, result)
 		if rpcErr != nil {
 			reply = protocol.NewErrorResponse(*msg.ID, rpcErr.Code, rpcErr.Message)
@@ -312,16 +318,35 @@ func (d *Daemon) serveConn(ctx context.Context, raw net.Conn) {
 	}
 }
 
+// connState is what one connection has established about itself.
+type connState struct {
+	conn        *clientConn
+	env         Env
+	initialized bool
+}
+
 func (d *Daemon) dispatch(
-	ctx context.Context, conn *clientConn, sessions *sync.WaitGroup, msg protocol.Incoming,
+	ctx context.Context, state *connState, sessions *sync.WaitGroup, msg protocol.Incoming,
 ) (json.RawMessage, *protocol.Error) {
 	switch msg.Method {
 	case "initialize":
-		return d.initialize(msg.Params)
-	case "command/run":
-		return d.startSession(ctx, conn, sessions, msg.Params)
+		return d.initialize(state, msg.Params)
 	case "server/shutdown":
 		return json.RawMessage(`{}`), nil
+	case "capabilities/list", "command/run":
+		// Both need the session's environment, which arrives with the handshake.
+		// Answering before it would mean judging against the daemon's own, which is the
+		// mistake this arrangement exists to avoid.
+		if !state.initialized {
+			return nil, &protocol.Error{
+				Code:    protocol.CodeInvalidParams,
+				Message: msg.Method + " needs a session: send initialize first",
+			}
+		}
+		if msg.Method == "capabilities/list" {
+			return d.capabilities(state)
+		}
+		return d.startSession(ctx, state.conn, sessions, msg.Params)
 	default:
 		return nil, &protocol.Error{
 			Code:    protocol.CodeMethodNotFound,
@@ -398,6 +423,7 @@ type initializeParams struct {
 		Kind             string `json:"kind"`
 		Version          string `json:"version"`
 		ProtocolVersions []int  `json:"protocol_versions"`
+		Env              Env    `json:"env"`
 	} `json:"client"`
 }
 
@@ -406,11 +432,12 @@ type coreInfo struct {
 }
 
 type initializeResult struct {
-	ProtocolVersion int      `json:"protocol_version"`
-	Core            coreInfo `json:"core"`
+	ProtocolVersion int               `json:"protocol_version"`
+	Core            coreInfo          `json:"core"`
+	Capabilities    []registry.Report `json:"capabilities,omitempty"`
 }
 
-func (d *Daemon) initialize(params json.RawMessage) (json.RawMessage, *protocol.Error) {
+func (d *Daemon) initialize(state *connState, params json.RawMessage) (json.RawMessage, *protocol.Error) {
 	var p initializeParams
 	if len(params) > 0 {
 		if err := json.Unmarshal(params, &p); err != nil {
@@ -429,10 +456,41 @@ func (d *Daemon) initialize(params json.RawMessage) (json.RawMessage, *protocol.
 		}
 	}
 
+	if p.Client.Env.GOOS == "" {
+		return nil, &protocol.Error{
+			Code: protocol.CodeInvalidParams,
+			Message: "initialize needs the client's environment: capabilities are judged " +
+				"against it, not against the daemon's",
+		}
+	}
+	state.env = p.Client.Env
+	state.initialized = true
+
 	out, err := json.Marshal(initializeResult{
 		ProtocolVersion: protocol.Version,
 		Core:            coreInfo{Version: d.opts.Version},
+		Capabilities:    d.snapshot(state.env),
 	})
+	if err != nil {
+		return nil, &protocol.Error{Code: protocol.CodeInternalError, Message: err.Error()}
+	}
+	return out, nil
+}
+
+// snapshot judges every capability against one session's environment.
+//
+// It is computed per request rather than cached here. The daemon is the only place
+// that knows which session is asking, and a cache keyed by anything coarser would
+// answer one client with another client's machine.
+func (d *Daemon) snapshot(env Env) []registry.Report {
+	if d.opts.Registry == nil {
+		return nil
+	}
+	return d.opts.Registry.Snapshot(env.host()).Capabilities
+}
+
+func (d *Daemon) capabilities(state *connState) (json.RawMessage, *protocol.Error) {
+	out, err := json.Marshal(registry.Snapshot{Capabilities: d.snapshot(state.env)})
 	if err != nil {
 		return nil, &protocol.Error{Code: protocol.CodeInternalError, Message: err.Error()}
 	}

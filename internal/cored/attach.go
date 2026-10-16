@@ -26,6 +26,11 @@ type AttachOptions struct {
 
 	// Budget bounds how long Attach waits for a spawned daemon to answer.
 	Budget time.Duration
+
+	// Env is what this client reports about the machine it is on. Capabilities are
+	// judged against it, so a client that leaves it zeroed gets a core that knows
+	// nothing about the environment it is being asked about.
+	Env Env
 }
 
 // Attach connects to a daemon, starting one if none is listening.

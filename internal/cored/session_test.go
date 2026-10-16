@@ -43,8 +43,24 @@ func (c *client) await(method string) protocol.Incoming {
 	return protocol.Incoming{}
 }
 
+// ensureInitialized handshakes once per connection. It is not folded into dial()
+// because a test has to be able to ask what an un-initialized connection is allowed
+// to do.
+func (c *client) ensureInitialized() {
+	c.t.Helper()
+	if c.initialized {
+		return
+	}
+	reply := c.call("initialize", initParams(c.t, map[string]any{"os": "linux"}))
+	if reply.Error != nil {
+		c.t.Fatalf("initialize: %+v", reply.Error)
+	}
+	c.initialized = true
+}
+
 func (c *client) startSession(util string) string {
 	c.t.Helper()
+	c.ensureInitialized()
 	reply := c.call("command/run", `{"util":"`+util+`"}`)
 	if reply.Error != nil {
 		c.t.Fatalf("command/run failed: %+v", reply.Error)

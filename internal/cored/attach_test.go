@@ -152,7 +152,7 @@ func TestAttachStartsADaemonWhenNoneIsRunning(t *testing.T) {
 	// The connection is to a real daemon, not to something that merely accepted a
 	// socket: it has to answer the handshake.
 	w := protocol.NewWriter(conn)
-	if err := w.WriteMessage(protocol.NewRequest(1, "initialize", []byte(`{"client":{"protocol_versions":[1]}}`))); err != nil {
+	if err := w.WriteMessage(protocol.NewRequest(1, "initialize", []byte(`{"client":{"protocol_versions":[1],"env":{"os":"linux"}}}`))); err != nil {
 		t.Fatalf("write initialize: %v", err)
 	}
 	reply, err := protocol.NewReader(conn).Read()

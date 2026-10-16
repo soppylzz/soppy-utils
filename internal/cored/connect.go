@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"runtime"
 	"time"
 
 	"github.com/soppylzz/soppy-utils/internal/protocol"
@@ -63,7 +64,7 @@ func Connect(ctx context.Context, opts AttachOptions) (*Conn, error) {
 	r := protocol.NewReader(conn)
 	w := protocol.NewWriter(conn)
 
-	info, err := handshake(r, w)
+	info, err := handshake(r, w, opts.Env)
 	if err == nil {
 		return &Conn{Conn: conn, r: r, w: w, Info: info}, nil
 	}
@@ -85,7 +86,7 @@ func Connect(ctx context.Context, opts AttachOptions) (*Conn, error) {
 	r = protocol.NewReader(conn)
 	w = protocol.NewWriter(conn)
 
-	info, err = handshake(r, w)
+	info, err = handshake(r, w, opts.Env)
 	if err != nil {
 		conn.Close()
 		return nil, fmt.Errorf("the restarted core still disagrees: %w", err)
@@ -93,9 +94,17 @@ func Connect(ctx context.Context, opts AttachOptions) (*Conn, error) {
 	return &Conn{Conn: conn, r: r, w: w, Info: info}, nil
 }
 
-func handshake(r *protocol.Reader, w *protocol.Writer) (Handshake, error) {
+func handshake(r *protocol.Reader, w *protocol.Writer, env Env) (Handshake, error) {
+	if env.GOOS == "" {
+		// The client and the daemon are on the same machine, so this is a fact about
+		// where the client is running rather than a guess about the daemon.
+		env.GOOS = runtime.GOOS
+	}
 	params, err := json.Marshal(map[string]any{
-		"client": map[string]any{"protocol_versions": []int{protocol.Version}},
+		"client": map[string]any{
+			"protocol_versions": []int{protocol.Version},
+			"env":               env,
+		},
 	})
 	if err != nil {
 		return Handshake{}, fmt.Errorf("encode initialize: %w", err)
