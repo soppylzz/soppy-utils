@@ -99,11 +99,20 @@ func splitFrontmatter(body string) (front, rest string, ok bool) {
 	return "", body, false
 }
 
+// checkQuotes looks for a quote that was opened and not closed.
+//
+// Only a value that opens with a quote is a quoted scalar, and only then does it have to
+// close. A plain scalar may contain either character freely — `a package's source` is
+// ordinary English, and counting apostrophes condemned every description that had one.
 func checkQuotes(outPath, key, value string) error {
 	for _, q := range []string{`"`, `'`} {
-		if strings.HasPrefix(value, q) != strings.HasSuffix(value, q) || strings.Count(value, q)%2 != 0 {
-			return fmt.Errorf("%s: the value of %q has an unbalanced quote, so the "+
-				"frontmatter would not parse and every field would be dropped", outPath, strings.TrimSpace(key))
+		if !strings.HasPrefix(value, q) {
+			continue
+		}
+		if len(value) < 2 || !strings.HasSuffix(value, q) || strings.Count(value, q)%2 != 0 {
+			return fmt.Errorf("%s: the value of %q opens with a quote and does not close "+
+				"it, so the frontmatter would not parse and every field would be dropped",
+				outPath, strings.TrimSpace(key))
 		}
 	}
 	return nil

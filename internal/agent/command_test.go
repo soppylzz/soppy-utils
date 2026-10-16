@@ -333,120 +333,6 @@ func TestStatusDoesNotReportTheIndexAsUnknown(t *testing.T) {
 	}
 }
 
-func TestChoosingAHarnessRegistersTheMCPServer(t *testing.T) {
-	// The three registrations are three different files in two formats. Claude Code reads
-	// a file at the project root, Pi reads one under .pi/, and Codex reads TOML.
-	project := t.TempDir()
-	reply := &coretest.Recorder{Askable: true, Answers: map[string]any{
-		"items":     []any{"conduct-of-go"},
-		"harnesses": []any{"claude", "pi", "codex"},
-	}}
-	if err := (Handler{}).Run(context.Background(), core.Command{
-		Util: "agent", Session: core.Session{GOOS: "linux", WorkingDir: project},
-	}, reply); err != nil {
-		t.Fatalf("generate: %v", err)
-	}
-
-	for _, path := range []string{
-		filepath.Join(project, ".mcp.json"),
-		filepath.Join(project, ".pi", "mcp.json"),
-	} {
-		body, err := os.ReadFile(path)
-		if err != nil {
-			t.Errorf("no registration at %s: %v", path, err)
-			continue
-		}
-		if !strings.Contains(string(body), "spu-clone-third-party") {
-			t.Errorf("%s does not name the binary:\n%s", path, body)
-		}
-	}
-
-	codex, err := os.ReadFile(filepath.Join(project, ".codex", "config.toml"))
-	if err != nil {
-		t.Fatalf("no Codex registration: %v", err)
-	}
-	if !strings.Contains(string(codex), "[mcp_servers.clone-third-party]") {
-		t.Errorf("the Codex registration is not a TOML table:\n%s", codex)
-	}
-
-	record, err := os.ReadFile(filepath.Join(canonical(project), "mcp", "spu.json"))
-	if err != nil {
-		t.Fatalf("the canonical definition was not written: %v", err)
-	}
-	if !strings.Contains(string(record), "clone-third-party") {
-		t.Errorf("the record does not name the server:\n%s", record)
-	}
-	for _, want := range []string{"claude", "pi", "codex"} {
-		if !strings.Contains(string(record), want) {
-			t.Errorf("the record does not say it was registered with %s:\n%s", want, record)
-		}
-	}
-}
-
-func TestNoHarnessMeansNoRegistration(t *testing.T) {
-	// A project that chose no harness gets no .mcp.json at its root. Writing one would be
-	// answering a question nobody asked.
-	project := t.TempDir()
-	reply := &coretest.Recorder{Askable: true, Answers: map[string]any{
-		"items": []any{"conduct-of-go"}, "harnesses": []any{},
-	}}
-	if err := (Handler{}).Run(context.Background(), core.Command{
-		Util: "agent", Session: core.Session{GOOS: "linux", WorkingDir: project},
-	}, reply); err != nil {
-		t.Fatalf("generate: %v", err)
-	}
-	if _, err := os.Stat(filepath.Join(project, ".mcp.json")); err == nil {
-		t.Error("a registration was written although no harness was chosen")
-	}
-	if _, err := os.Stat(filepath.Join(canonical(project), "mcp")); err == nil {
-		t.Error("the MCP record was written although no harness was chosen")
-	}
-}
-
-func TestTheCacheSectionOnlyAppearsWhenTheServerIsRegistered(t *testing.T) {
-	// Telling a project how to protect a cache it does not use is noise, and noise in the
-	// one file an agent reads is worse than elsewhere.
-	withServer := t.TempDir()
-	reply := &coretest.Recorder{Askable: true, Answers: map[string]any{
-		"items": []any{"conduct-of-go"}, "harnesses": []any{"claude"},
-	}}
-	if err := (Handler{}).Run(context.Background(), core.Command{
-		Util: "agent", Session: core.Session{GOOS: "linux", WorkingDir: withServer},
-	}, reply); err != nil {
-		t.Fatalf("generate: %v", err)
-	}
-	body, err := os.ReadFile(filepath.Join(canonical(withServer), "SPU.md"))
-	if err != nil {
-		t.Fatalf("no index: %v", err)
-	}
-	if !strings.Contains(string(body), "reference cache") {
-		t.Errorf("the cache section is missing although the server was registered:\n%s", body)
-	}
-	if strings.Contains(string(body), "<!--") {
-		t.Errorf("a placeholder was left behind:\n%s", body)
-	}
-
-	withoutServer := t.TempDir()
-	reply = &coretest.Recorder{Askable: true, Answers: map[string]any{
-		"items": []any{"conduct-of-go"}, "harnesses": []any{},
-	}}
-	if err := (Handler{}).Run(context.Background(), core.Command{
-		Util: "agent", Session: core.Session{GOOS: "linux", WorkingDir: withoutServer},
-	}, reply); err != nil {
-		t.Fatalf("generate: %v", err)
-	}
-	body, err = os.ReadFile(filepath.Join(canonical(withoutServer), "SPU.md"))
-	if err != nil {
-		t.Fatalf("no index: %v", err)
-	}
-	if strings.Contains(string(body), "reference cache") {
-		t.Errorf("the cache section is there although no server was registered:\n%s", body)
-	}
-	if strings.Contains(string(body), "## \n") || strings.Contains(string(body), "\n\n\n\n") {
-		t.Errorf("dropping the section left a hole:\n%s", body)
-	}
-}
-
 func run(t *testing.T, dir string, reply core.Responder, args ...string) error {
 	t.Helper()
 	return (Handler{}).Run(context.Background(), core.Command{
@@ -471,8 +357,12 @@ func TestFlagsCanChooseWithoutATerminal(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(canonical(project), "prompts", "conduct-of-docs.md")); err == nil {
 		t.Error("an item that was not named was generated anyway")
 	}
-	if _, err := os.Stat(filepath.Join(project, ".mcp.json")); err != nil {
+	// Claude Code is the one harness that needs something put in its own directory: it
+	// does not read .agents/skills, so a project with skills needs the link.
+	if target, err := os.Readlink(filepath.Join(project, ".claude", "skills")); err != nil {
 		t.Errorf("the named harness was not arranged for: %v", err)
+	} else if target != filepath.Join("..", ".agents", "skills") {
+		t.Errorf("link target = %q", target)
 	}
 	if len(reply.Asked) != 0 {
 		t.Errorf("a form was shown although the flags said everything: %v", reply.Asked)
@@ -523,8 +413,12 @@ func TestAnAnswersFileCanSayEverything(t *testing.T) {
 	if !strings.Contains(string(body), "commitlint") {
 		t.Error("the answer from the file was not used")
 	}
-	if _, err := os.Stat(filepath.Join(project, ".pi", "mcp.json")); err != nil {
-		t.Errorf("the harness from the file was not arranged for: %v", err)
+	led, err := readLedger(project)
+	if err != nil {
+		t.Fatalf("readLedger: %v", err)
+	}
+	if len(led.Harnesses) != 1 || led.Harnesses[0] != "pi" {
+		t.Errorf("harnesses = %v, want the one the file named", led.Harnesses)
 	}
 	if len(reply.Asked) != 0 {
 		t.Error("a form was shown although the file answered everything")
@@ -645,7 +539,7 @@ func TestEditingOneItemKeepsEveryOtherRecord(t *testing.T) {
 	if err != nil {
 		t.Fatalf("readLedger: %v", err)
 	}
-	for _, id := range []string{"conduct-of-go", "soppy-excalidraw", "spu-index", "spu-mcp"} {
+	for _, id := range []string{"conduct-of-go", "soppy-excalidraw", "spu-index"} {
 		if _, ok := led.Find(id); !ok {
 			t.Errorf("editing one item dropped %q from the record", id)
 		}

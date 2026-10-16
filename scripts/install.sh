@@ -145,8 +145,7 @@ binary_suffix=''
   binary="$binary.exe"
   binary_suffix='.exe'
 }
-reference="$tmp/stage/libexec/spu-clone-third-party$binary_suffix"
-[[ -f "$tmp/stage/bin/spu" && -f "$tmp/stage/src/spu.sh" && -f "$tmp/stage/src/utils/style.sh" && -f "$tmp/stage/scripts/update.sh" && -x "$binary" && -x "$reference" ]] || {
+[[ -f "$tmp/stage/bin/spu" && -f "$tmp/stage/src/spu.sh" && -f "$tmp/stage/src/utils/style.sh" && -f "$tmp/stage/scripts/update.sh" && -x "$binary" ]] || {
   echo 'install: incomplete package' >&2
   exit 1
 }
@@ -177,17 +176,6 @@ if ! mv "$tmp/stage" "$target"; then
   if [[ -d "$backup" ]]; then mv "$backup" "$target"; fi
   echo 'install: package swap failed' >&2
   exit 1
-fi
-
-# The MCP server is started by a harness, by the name a registration file gives. That
-# name has to resolve on whatever machine reads the registration, so the binary goes on
-# PATH beside the launcher rather than being referred to by an absolute path that would
-# only work on the machine that wrote it.
-reference_target="$(dirname "$launcher")/spu-clone-third-party"
-if [[ "$platform" == windows ]]; then
-  cp -f "$target/libexec/spu-clone-third-party$binary_suffix" "$reference_target.exe"
-else
-  ln -sf "$target/libexec/spu-clone-third-party" "$reference_target"
 fi
 
 wrapper="$tmp/spu"

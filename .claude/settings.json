@@ -17,8 +17,7 @@
       "WebFetch(domain:raw.githubusercontent.com)"
     ],
     "ask": [
-      "Bash(git push:*)",
-      "Bash(git commit:*)"
+      "Bash(git push:*)"
     ],
     "deny": [
       "Edit(./.env*)",

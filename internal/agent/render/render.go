@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"fmt"
 	"io/fs"
+	"strconv"
 
 	"github.com/soppylzz/soppy-utils/internal/agent/item"
 )
@@ -24,13 +25,21 @@ func Output(out item.Output, answers map[string]any, files fs.FS) ([]byte, error
 		if !holds(seg.When, answers) {
 			continue
 		}
+		var body []byte
 		if seg.Text != "" {
-			buf.WriteString(seg.Text)
-			continue
+			body = []byte(seg.Text)
+		} else {
+			read, err := fs.ReadFile(files, seg.File)
+			if err != nil {
+				return nil, fmt.Errorf("content %q: %w", seg.File, err)
+			}
+			body = read
 		}
-		body, err := fs.ReadFile(files, seg.File)
+		// Answers are written into the text, whichever it came from: a document that names
+		// something the reader chose cannot say which until the choice is made.
+		body, err := substitute(body, answers, "content "+segName(seg))
 		if err != nil {
-			return nil, fmt.Errorf("content %q: %w", seg.File, err)
+			return nil, err
 		}
 		buf.Write(body)
 	}
@@ -95,4 +104,12 @@ func matches(v any, want string) bool {
 		}
 	}
 	return false
+}
+
+// segName is how a segment is referred to in an error.
+func segName(seg item.Segment) string {
+	if seg.File != "" {
+		return strconv.Quote(seg.File)
+	}
+	return "written inline"
 }

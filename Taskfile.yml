@@ -40,7 +40,6 @@ tasks:
     cmds:
       - mkdir -p "$SPU_BUILD_OUT_DIR"
       - go build -ldflags "-X main.version=$SPU_BUILD_VERSION" -o "$SPU_BUILD_OUT_DIR/spu$(go env GOEXE)" ./cmd/spu
-      - go build -o "$SPU_BUILD_OUT_DIR/spu-clone-third-party$(go env GOEXE)" ./cmd/spu-clone-third-party
 
   package:
     desc: Build release archives and checksums (VERSION=dev OUT_DIR=dist).

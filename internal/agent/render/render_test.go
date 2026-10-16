@@ -154,3 +154,60 @@ func TestAMissingContentFileIsAnError(t *testing.T) {
 		t.Errorf("error %q does not name the missing file", err)
 	}
 }
+
+func TestAnAnswerIsWrittenIntoTheText(t *testing.T) {
+	// A document that names a directory somebody chose cannot say which one until the
+	// choice is made, and the choice is not known when the template is written.
+	out := output(t, `{
+	  "id": "a", "version": 1, "policy": "reuse",
+	  "questions": {"type": "object", "properties": {"dir": {"type": "string"}}},
+	  "outputs": [{"root": "agents", "path": "x.md", "content": [
+	    {"text": "read from {{dir}} and nowhere else\n"},
+	    {"file": "plain.md"}
+	  ]}]
+	}`)
+
+	got, err := Output(out, map[string]any{"dir": "~/code/reference"}, content())
+	if err != nil {
+		t.Fatalf("Output: %v", err)
+	}
+	if string(got) != "read from ~/code/reference and nowhere else\nno trailing newline" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestAnAnswerNobodyGaveIsRefused(t *testing.T) {
+	// What gets written otherwise is a document containing `{{dir}}`, which reads as a
+	// document that meant to say something and did not.
+	out := output(t, `{
+	  "id": "a", "version": 1, "policy": "reuse",
+	  "outputs": [{"root": "agents", "path": "x.md", "content": [
+	    {"text": "read from {{dir}}\n"}]}]
+	}`)
+
+	_, err := Output(out, nil, content())
+	if err == nil {
+		t.Fatal("a placeholder with no answer was written out")
+	}
+	if !strings.Contains(err.Error(), "dir") {
+		t.Errorf("error %q does not name the placeholder", err)
+	}
+}
+
+func TestTextWithoutAPlaceholderIsCopiedThrough(t *testing.T) {
+	// The documents are full of braces — `${var^^}` is in the shell conventions — so a
+	// substitution that looked at single braces would corrupt them.
+	out := output(t, `{
+	  "id": "a", "version": 1, "policy": "reuse",
+	  "outputs": [{"root": "agents", "path": "x.md", "content": [
+	    {"text": "no ${var} here\n"}]}]
+	}`)
+
+	got, err := Output(out, nil, content())
+	if err != nil {
+		t.Fatalf("Output: %v", err)
+	}
+	if string(got) != "no ${var} here\n" {
+		t.Errorf("got %q", got)
+	}
+}

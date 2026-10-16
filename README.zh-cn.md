@@ -128,11 +128,16 @@ spu 不会往 `AGENTS.md` 或 `CLAUDE.md` 里写任何东西 —— 那是项目
 
 不要修改生成的文件。把你要补充的内容另写一份放在旁边，并在 `AGENTS.md` 中说明；你自己拥有的文档永远不会被动。要改变生成文档的内容，就改变它依据的答案。
 
-选中某个 harness 时，`spu-clone-third-party` 也会注册到该 harness 读取的文件里：Claude Code 是项目根的 `.mcp.json`，Pi 是 `.pi/mcp.json`，Codex 是 `.codex/config.toml` 里的 `[mcp_servers.clone-third-party]`。Codex 的文件是项目的通用配置而非专门存服务的文件，因此是往里面**追加**表，而不是重写该文件 —— 项目自己的注释和顺序都会保留。取消选中某个 harness 时，只移除 spu 自己的条目。`.agents/mcp/spu.json` 记录注册了什么、注册到了哪些 harness。
+选中某个 harness 会为它做安排：Claude Code 不会自己读 `.agents/skills`，因此给它一个链接；另外两家直接读规范目录。
 
-spu 不为任何 harness 写权限规则，所以没有任何东西阻止 agent 往那个缓存里写。Claude Code 可以自行配置：在 `.claude/settings.json` 里加 `{"permissions":{"deny":["Edit(~/code/reference/**)"]}}`。另外两家无法配置：Codex 的沙箱是白名单模型，其 glob 规则只能禁止**读**；Pi 没有内置沙箱，也不对任何操作请求批准。如果写权限对你重要，请隔离这两个 harness。`.agents/SPU.md` 里对读到它的人也是这么说的。
+有一个 item 不是约定而是**流程**：**Reading third-party source** 教 agent 把依赖 clone 到你生成时指定的目录，并在那里阅读，而不是反复发同样的网络请求。那个目录是一个答案，因此会出现在 `spu agent` 的问题里和 `--answers` 里，生成的 skill 全程引用它：
 
-`spu-clone-third-party` 与 `spu` 一同安装、同在 `PATH` 上，所以提交进仓库的注册在任何一个装过它的机器上都能用。它是一个 MCP 服务，把第三方包的本地检出交给 agent 阅读，让 agent 读本地目录而不是反复发网络请求。版本可以给主版本号（`8`）、完整版本（`8.1.0`），或省略表示最新发布版；给主版本号意味着取该主版本下的最新版，并且工具报告的是**实际检出的版本**而不是你请求的版本。主版本号匹配的检出会被直接复用、完全不联网。具体版本绝不会被自行拉取，因为未经确认就拉取固定版本正是缓存变成供应链的方式。
+```sh
+spu agent --items reference-checkout \
+  --answers <(echo '{"answers":{"reference-checkout":{"reference-dir":"~/refs"}}}')
+```
+
+这个 skill 也说明了 clone 什么、怎么 clone：浅克隆、按项目已经依赖的版本，版本号通过列出远端 tag 得到而不是猜一个 ref。spu 不为任何 harness 写权限规则，所以它写明的只读约定没有东西强制执行 —— 那是一份 agent 遵循的流程，不是一个沙箱。
 
 ## 卸载
 

@@ -17,12 +17,10 @@ Write code comments, commit messages, requirement documents, and the English REA
 - `bin/spu`: thin Bash launcher.
 - `src/spu.sh`, `src/utils/style.sh`: the launcher's dispatcher and its presentation helpers.
 - `cmd/spu`: the one executable. It is a client, and the core daemon it starts when it cannot reach one.
-- `cmd/spu-clone-third-party`: a second binary, an MCP server over stdio. It is deliberately not a mode of `spu`: it needs no daemon, speaks somebody else's protocol, and a fault in it must not take a person's shell tools down with it.
 - `internal/clioutput`: shared Go CLI diagnostics on stderr.
 - `internal/configstore`: per-util `VERSION`, JSON config, schema validation, and in-memory defaults.
 - `internal/{welcome,license,gitconfig,vscode}`: util-specific behaviour, form and action descriptions, templates, and ownership rules.
-- `internal/agent`: the `agent` util, split so each boundary is testable alone. `internal/agent/item` parses and validates an item definition, `render` turns answers into an output's bytes, `ledger` reads and writes `spu.json`, `decide` is the fact-and-policy table with no filesystem in it, `harness` knows where each coding agent reads text, and `content` is what is embedded.
-- `internal/thirdparty`: the cache behind `spu-clone-third-party`.
+- `internal/agent`: the `agent` util, split so each boundary is testable alone. `internal/agent/item` parses and validates an item definition, `render` turns answers into an output's bytes, `ledger` reads and writes `spu.json`, `decide` is the fact-and-policy table with no filesystem in it, `harness` knows where each coding agent reads text, and `content` is what is embedded — the definitions in `items/` and the text they name in `docs/`. An item somebody adds lives under `agent/templates/` in the configuration directory and reads its text from beside its own definition.
 - `internal/{protocol,transport,registry,form,action,core,cored,client,cli}`: the core and the clients that talk to it.
 - `Taskfile.yml`: go-task entry point for development, build, and CI commands.
 - `.githooks/pre-commit`: optional staged-snapshot quality gate.

@@ -80,3 +80,25 @@ func TestASkillNamedAfterAReservedDirectoryIsRejected(t *testing.T) {
 		}
 	}
 }
+
+func TestAPlainValueMayContainAnApostrophe(t *testing.T) {
+	// A description is ordinary English, and English has apostrophes. Counting them
+	// condemned every skill whose description mentioned a package's or a library's
+	// anything — which is most of them.
+	err := Check("skills/x/SKILL.md", skill(
+		"name: x\ndescription: Read a package's source, and a library's docs, when it's thin.\n"))
+	if err != nil {
+		t.Fatalf("Check refused a plain value containing apostrophes: %v", err)
+	}
+}
+
+func TestAQuotedValueStillHasToClose(t *testing.T) {
+	err := Check("skills/x/SKILL.md", skill(
+		"name: x\ndescription: \"Read a package's source and never close it\n"))
+	if err == nil {
+		t.Fatal("Check accepted a quoted value with no closing quote")
+	}
+	if !strings.Contains(err.Error(), "quote") {
+		t.Errorf("error %q does not say what is wrong", err)
+	}
+}

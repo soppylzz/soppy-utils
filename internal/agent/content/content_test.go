@@ -25,8 +25,12 @@ func TestEveryShippedItemParsesAndRenders(t *testing.T) {
 		}
 		ids[it.ID] = true
 
+		// With the answers the item declares: that is what a run with nobody to ask
+		// produces, and an item whose questions have no defaults is one that cannot be
+		// generated without somebody there.
+		answers := it.Defaults()
 		for _, out := range it.Outputs {
-			body, err := render.Output(out, nil, Files())
+			body, err := render.Output(out, answers, Files())
 			if err != nil {
 				t.Errorf("item %s: %v", it.ID, err)
 				continue

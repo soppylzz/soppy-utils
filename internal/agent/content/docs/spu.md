@@ -41,26 +41,6 @@ becomes yours.
 - `skills/` — skills, each a directory holding a `SKILL.md`.
 - `SPU.md` — this file.
 
-## The reference cache
-
-`spu-clone-third-party` keeps third-party checkouts under `~/code/reference`, or wherever
-`SPU_REFERENCE_CACHE` points. An agent should read there and not write there.
-
-spu writes no permission rules for any harness, so nothing enforces that for you. Claude
-Code can be told to, by adding this to `.claude/settings.json`:
-
-```json
-{ "permissions": { "deny": ["Edit(~/code/reference/**)"] } }
-```
-
-**The other two cannot be told at all.** Codex's sandbox is an allowlist — anything outside
-the working directory already needs approval — and its glob rules only support denying
-reads; Pi has no built-in sandbox and asks for approval of nothing. If write access to that
-directory matters, isolate those two with a container or a dedicated account rather than
-expecting a config file to do it.
-
-<!-- spu:mcp -->
-
 ## The documents
 
 <!-- spu:index -->

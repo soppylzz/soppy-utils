@@ -126,15 +126,8 @@ func generate(ctx context.Context, project, configRoot string, args []string, re
 	}
 	// The index lists what was chosen, so it is built from the choice rather than from an
 	// item: an item cannot describe a list that does not exist until the items are picked.
-	if len(harnesses) > 0 {
-		mcp, err := mcpStep(project, harnesses, mcpServers())
-		if err != nil {
-			return err
-		}
-		steps = append(steps, mcp)
-	}
 
-	idx, err := indexStep(project, steps, len(harnesses) > 0)
+	idx, err := indexStep(project, steps)
 	if err != nil {
 		return err
 	}
@@ -181,26 +174,6 @@ func generate(ctx context.Context, project, configRoot string, args []string, re
 		return err
 	}
 
-	// A project that dropped a harness has its registration taken back out, and only
-	// spu's own entry is ever touched.
-	if gone := missing(led.Harnesses, harnesses); len(gone) > 0 {
-		removed, err := harness.UnregisterMCP(project, gone, mcpServers())
-		for _, line := range removed {
-			_ = reply.Notify(line)
-		}
-		if err != nil {
-			return err
-		}
-	}
-	if len(harnesses) > 0 {
-		registered, err := harness.RegisterMCP(project, harnesses, mcpServers())
-		for _, line := range registered {
-			_ = reply.Notify(line)
-		}
-		if err != nil {
-			return err
-		}
-	}
 	return reply.Finish(nil)
 }
 
@@ -428,7 +401,7 @@ func status(project, configRoot string, args []string, reply core.Responder) err
 		// The index is generated from the selection rather than from an item, so it is
 		// not in the list to be looked up in. Reporting it as an unknown item was a
 		// warning about a file spu wrote itself.
-		if recorded.ID == indexID || recorded.ID == mcpRecordID {
+		if recorded.ID == indexID {
 			continue
 		}
 		it, still := known[recorded.ID]
@@ -563,11 +536,16 @@ func migrate(project, configRoot string, args []string, reply core.Responder) er
 		if _, ok := led.Find(src.Item.ID); ok {
 			continue
 		}
+		// Rendered from what the item declares, because there is nobody to ask and nothing
+		// recorded: a file adopted here has to be one this spu would have written anyway.
+		// An item that asks something with no declared answer is skipped — no file of its
+		// could have been generated without one.
 		steps, err := Plan(PlanOptions{
 			Project: project, Items: []item.Source{src},
+			Answers: map[string]map[string]any{src.Item.ID: src.Item.Defaults()},
 		})
 		if err != nil {
-			return err
+			continue
 		}
 		var outputs []ledger.Output
 		for _, step := range steps {
@@ -680,4 +658,22 @@ func removeItem(configRoot string, args []string, reply core.Responder) error {
 		return err
 	}
 	return reply.Finish(nil)
+}
+
+// missing returns the names in from that are not in against.
+//
+// Used for the harnesses a project has stopped using: a registration that outlives the
+// choice keeps offering an agent a tool the project no longer wants.
+func missing(from, against []string) []string {
+	have := make(map[string]bool, len(against))
+	for _, h := range against {
+		have[h] = true
+	}
+	var out []string
+	for _, h := range from {
+		if !have[h] {
+			out = append(out, h)
+		}
+	}
+	return out
 }

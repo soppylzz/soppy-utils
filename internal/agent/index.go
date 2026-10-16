@@ -20,11 +20,6 @@ const indexID = "spu-index"
 // indexMarker is where the generated list goes in the prose.
 const indexMarker = "<!-- spu:index -->"
 
-// mcpMarker is where the reference-cache section goes. It is only kept when a server was
-// actually registered: a project that registered none should not be told how to protect a
-// cache it does not use.
-const mcpMarker = "<!-- spu:mcp -->"
-
 // indexStep builds SPU.md from the prose and the files this run is generating.
 //
 // It is generated rather than written as an item because its content is the selection
@@ -33,7 +28,7 @@ const mcpMarker = "<!-- spu:mcp -->"
 //
 // It is always written when anything is chosen, and never when nothing is: a project
 // whose files were all deselected should not keep an index pointing at them.
-func indexStep(project string, steps []Step, registeredMCP bool) (Step, error) {
+func indexStep(project string, steps []Step) (Step, error) {
 	prose, err := content.SPUProse()
 	if err != nil {
 		return Step{}, err
@@ -50,10 +45,9 @@ func indexStep(project string, steps []Step, registeredMCP bool) (Step, error) {
 	byItem := map[string]*entry{}
 
 	for _, step := range steps {
-		// Only what somebody chose. The index and the MCP record are files spu keeps for
-		// itself: pointing an agent at a JSON record of registrations spends its attention
-		// on something that says nothing about the work.
-		if step.Item.ID == indexID || step.Item.ID == mcpRecordID {
+		// Only what somebody chose. The index is a file spu keeps for itself, and pointing
+		// an agent at it spends attention on something that says nothing about the work.
+		if step.Item.ID == indexID {
 			continue
 		}
 		idx, ok := seen[step.Item.ID]
@@ -84,12 +78,6 @@ func indexStep(project string, steps []Step, registeredMCP bool) (Step, error) {
 	// Paths in the index are relative to the index, which sits beside the directories the
 	// documents are in, so an `@` resolves without the reader knowing where they are.
 	body := strings.Replace(string(prose), indexMarker, strings.TrimRight(list.String(), "\n"), 1)
-	if registeredMCP {
-		// The section stays; only the marker that placed it goes.
-		body = strings.Replace(body, "\n\n"+mcpMarker, "", 1)
-	} else {
-		body = dropSection(body, mcpMarker)
-	}
 
 	return Step{
 		Item: item.Item{

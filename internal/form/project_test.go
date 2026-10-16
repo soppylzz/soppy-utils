@@ -336,3 +336,30 @@ func TestProjectABareObjectSchema(t *testing.T) {
 		t.Errorf("items = %+v, want a multi-select with two choices", got)
 	}
 }
+
+func TestABareObjectSchemaCarriesItsOwnHints(t *testing.T) {
+	// An item's questions are the object itself, so the hints have to live in it. Without
+	// them a form shows the raw key: `reference-dir` where somebody wrote a title.
+	spec, err := FromObjectSchema([]byte(`{
+	  "type": "object",
+	  "x-spu-ui": {
+	    "title": "Reading third-party source",
+	    "order": ["reference-dir"],
+	    "fields": {"reference-dir": {"title": "Where checkouts are kept", "help": "A path"}}
+	  },
+	  "properties": {"reference-dir": {"type": "string"}}
+	}`), map[string]any{"reference-dir": "~/code/reference"})
+	if err != nil {
+		t.Fatalf("FromObjectSchema: %v", err)
+	}
+	if spec.Title != "Reading third-party source" {
+		t.Errorf("title = %q", spec.Title)
+	}
+	got := fieldByKey(t, spec, "reference-dir")
+	if got.Title != "Where checkouts are kept" {
+		t.Errorf("field title = %q, want the hint rather than the key", got.Title)
+	}
+	if got.Help != "A path" {
+		t.Errorf("help = %q", got.Help)
+	}
+}

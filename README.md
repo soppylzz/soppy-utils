@@ -128,11 +128,16 @@ Nothing generates into `AGENTS.md` or `CLAUDE.md`: those are the project's own f
 
 Do not edit a generated file. Add your own document beside it and say so in `AGENTS.md`; a document you own is never touched. Changing what a generated document says means changing the answer it came from.
 
-Choosing a harness also registers `spu-clone-third-party` with it, in the file that harness reads: `.mcp.json` at the project root for Claude Code, `.pi/mcp.json` for Pi, and `[mcp_servers.clone-third-party]` in `.codex/config.toml` for Codex. Codex's file is a project's general configuration rather than one that exists to hold servers, so the table is appended to it rather than the file being rewritten — a project's own comments and ordering survive. Deselecting a harness removes spu's entry and nothing else. `.agents/mcp/spu.json` records what was registered and with which harnesses.
+Choosing a harness arranges for it: Claude Code does not read `.agents/skills` on its own, so it gets a link, and the other two read the canonical directory directly.
 
-spu writes no permission rules for any harness, so nothing stops an agent writing into that cache. Claude Code can be told to, by adding `{"permissions":{"deny":["Edit(~/code/reference/**)"]}}` to `.claude/settings.json`. The other two cannot be told at all: Codex's sandbox is an allowlist whose glob rules deny reads rather than writes, and Pi has no built-in sandbox and asks for approval of nothing. If write access matters, isolate those two. `.agents/SPU.md` says the same thing to whoever reads it.
+One item is not a convention but a procedure. **Reading third-party source** teaches the agent to clone a dependency into a directory you choose when you generate it, and to read it there rather than making the same web request repeatedly. The directory is an answer, so it appears among `spu agent`'s questions and in `--answers`, and the generated skill names it throughout:
 
-`spu-clone-third-party` is installed alongside `spu`, on `PATH`, so a registration committed to a repository works on any machine that installed it. It is an MCP server that hands an agent a local checkout of a third-party package to read, so an agent reads a directory instead of making repeated web requests. A version may be a major (`8`), a full version (`8.1.0`), or omitted for the newest release; a major means the newest release of that major, and the tool reports the version it actually checked out rather than the one it was asked for. A checkout whose major matches is reused without any network access. An exact version is never fetched on its own, because pulling a pinned version without being told to is how a cache becomes a supply chain.
+```sh
+spu agent --items reference-checkout \
+  --answers <(echo '{"answers":{"reference-checkout":{"reference-dir":"~/refs"}}}')
+```
+
+The skill also says what to clone and how: shallow, at the version the project already depends on, found by listing the remote's tags rather than guessing a ref. spu writes no permission rules for any harness, so nothing enforces the read-only rule it states — the skill is a procedure an agent follows, not a sandbox.
 
 ## Uninstall
 

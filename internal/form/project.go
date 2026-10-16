@@ -28,14 +28,17 @@ func FromSchema(schema []byte, values map[string]any) (Spec, error) {
 // Both are the same question to a client, and wrapping the second in a synthetic envelope
 // would put a shape in it that nothing wrote.
 func FromObjectSchema(schema []byte, values map[string]any) (Spec, error) {
-	var raw dataSchema
-	if err := json.Unmarshal(schema, &raw); err != nil {
+	var doc struct {
+		UI *uiHints `json:"x-spu-ui"`
+		dataSchema
+	}
+	if err := json.Unmarshal(schema, &doc); err != nil {
 		return Spec{}, fmt.Errorf("schema: %w", err)
 	}
-	if len(raw.Properties) == 0 {
+	if len(doc.Properties) == 0 {
 		return Spec{}, nil
 	}
-	return specFrom(raw.Properties, raw.Required, nil, values)
+	return specFrom(doc.Properties, doc.Required, doc.UI, values)
 }
 
 func specFrom(properties map[string]json.RawMessage, requiredList []string, ui *uiHints,
