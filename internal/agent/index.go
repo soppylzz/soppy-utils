@@ -50,7 +50,10 @@ func indexStep(project string, steps []Step, registeredMCP bool) (Step, error) {
 	byItem := map[string]*entry{}
 
 	for _, step := range steps {
-		if step.Item.ID == indexID {
+		// Only what somebody chose. The index and the MCP record are files spu keeps for
+		// itself: pointing an agent at a JSON record of registrations spends its attention
+		// on something that says nothing about the work.
+		if step.Item.ID == indexID || step.Item.ID == mcpRecordID {
 			continue
 		}
 		idx, ok := seen[step.Item.ID]

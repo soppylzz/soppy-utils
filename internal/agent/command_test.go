@@ -684,3 +684,30 @@ func TestChoosingAgainDropsWhatWasNotChosen(t *testing.T) {
 		t.Errorf("the file should stay where it is, and it did not: %v", err)
 	}
 }
+
+func TestTheIndexListsDocumentsAndNotRecords(t *testing.T) {
+	// The MCP record and the ledger are files spu keeps for itself. Listing them as things
+	// to read points an agent at JSON that says nothing about the work, and spends the
+	// attention the documents are there to get.
+	project := t.TempDir()
+	if err := run(t, project, &coretest.Recorder{},
+		"--items", "conduct-of-go,soppy-excalidraw", "--harnesses", "claude"); err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+	body, err := os.ReadFile(filepath.Join(canonical(project), "SPU.md"))
+	if err != nil {
+		t.Fatalf("no index: %v", err)
+	}
+	text := string(body)
+	for _, want := range []string{"@prompts/conduct-of-go.md", "@skills/soppy-excalidraw/SKILL.md"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("the index does not name %q:\n%s", want, text)
+		}
+	}
+	for _, unwanted := range []string{"@mcp/spu.json", "@spu.json", "@SPU.md"} {
+		if strings.Contains(text, unwanted) {
+			t.Errorf("the index points an agent at %q, which is a record and not a document:\n%s",
+				unwanted, text)
+		}
+	}
+}
