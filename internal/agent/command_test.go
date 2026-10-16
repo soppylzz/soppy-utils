@@ -883,3 +883,26 @@ func TestAFileThatWasHandedOverCanBeTakenBack(t *testing.T) {
 		t.Error("migrate did not take the file back")
 	}
 }
+
+func TestTheLibraryFollowsTheSessionNotThisProcess(t *testing.T) {
+	// Where a program keeps its configuration differs by platform, and the answer belongs
+	// to the client that asked: the daemon outlives whoever started it, so its own
+	// environment would answer for the wrong person.
+	unixDefault := core.Session{Home: "/home/someone", GOOS: "linux"}
+	if got, want := configDir(unixDefault), "/home/someone/.config/soppy-utils"; got != want {
+		t.Errorf("configDir(linux) = %q, want %q", got, want)
+	}
+
+	windows := core.Session{Home: "/c/Users/someone", GOOS: "windows",
+		AppData: `C:\Users\someone\AppData\Roaming`}
+	if got := configDir(windows); !strings.Contains(got, "AppData") {
+		t.Errorf("configDir(windows) = %q, want the roaming application data directory", got)
+	}
+
+	// A platform that says it has no such directory falls back rather than writing to a
+	// path built from an empty string.
+	noAppData := core.Session{Home: "/home/someone", GOOS: "windows"}
+	if got, want := configDir(noAppData), "/home/someone/.config/soppy-utils"; got != want {
+		t.Errorf("configDir with no AppData = %q, want %q", got, want)
+	}
+}

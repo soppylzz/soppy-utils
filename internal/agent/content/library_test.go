@@ -7,6 +7,10 @@ import (
 	"testing"
 )
 
+// rootOf is the configuration root a session with this home resolves to. The tests set
+// the home and the library resolves the rest, which is the path the command takes too.
+func rootOf(home string) string { return filepath.Join(home, ".config", "soppy-utils") }
+
 // writeItem puts a template on disk the way somebody would.
 func writeItem(t *testing.T, dir, id, body string, files map[string]string) {
 	t.Helper()
@@ -61,7 +65,7 @@ func TestImportAddsATemplateOfYourOwn(t *testing.T) {
 	from := t.TempDir()
 	writeItem(t, from, "my-conventions", customItem, map[string]string{"header.md": "# Mine\n"})
 
-	got, replaced, err := Store(home, filepath.Join(from, "my-conventions"))
+	got, replaced, err := Store(rootOf(home), filepath.Join(from, "my-conventions"))
 	if err != nil {
 		t.Fatalf("Store: %v", err)
 	}
@@ -72,7 +76,7 @@ func TestImportAddsATemplateOfYourOwn(t *testing.T) {
 		t.Errorf("imported %q", got.Item.ID)
 	}
 
-	lib, err := Library(home)
+	lib, err := Library(rootOf(home))
 	if err != nil {
 		t.Fatalf("Library: %v", err)
 	}
@@ -97,19 +101,19 @@ func TestImportingTheSameNameAgainReplacesIt(t *testing.T) {
 	home := t.TempDir()
 	from := t.TempDir()
 	writeItem(t, from, "my-conventions", customItem, map[string]string{"header.md": "first\n"})
-	if _, _, err := Store(home, filepath.Join(from, "my-conventions")); err != nil {
+	if _, _, err := Store(rootOf(home), filepath.Join(from, "my-conventions")); err != nil {
 		t.Fatalf("first: %v", err)
 	}
 
 	writeItem(t, from, "my-conventions", customItem, map[string]string{"header.md": "second\n"})
-	_, replaced, err := Store(home, filepath.Join(from, "my-conventions"))
+	_, replaced, err := Store(rootOf(home), filepath.Join(from, "my-conventions"))
 	if err != nil {
 		t.Fatalf("second: %v", err)
 	}
 	if !replaced {
 		t.Error("re-importing reported nothing replaced")
 	}
-	body, err := os.ReadFile(filepath.Join(LibraryDir(home), "my-conventions", "header.md"))
+	body, err := os.ReadFile(filepath.Join(LibraryDir(rootOf(home)), "my-conventions", "header.md"))
 	if err != nil {
 		t.Fatalf("read: %v", err)
 	}
@@ -123,10 +127,10 @@ func TestATemplateThatDoesNotParseIsRefusedBeforeAnythingIsCopied(t *testing.T) 
 	from := t.TempDir()
 	writeItem(t, from, "broken", `{"id": "broken"}`, nil)
 
-	if _, _, err := Store(home, filepath.Join(from, "broken")); err == nil {
+	if _, _, err := Store(rootOf(home), filepath.Join(from, "broken")); err == nil {
 		t.Fatal("a definition that does not parse was imported")
 	}
-	if _, err := os.Stat(LibraryDir(home)); err == nil {
+	if _, err := os.Stat(LibraryDir(rootOf(home))); err == nil {
 		t.Error("something was copied before the definition was read")
 	}
 }
@@ -141,7 +145,7 @@ func TestATemplateCannotTakeTheNameOfOneSpuShips(t *testing.T) {
 	  "outputs": [{"root": "agents", "path": "x.md", "content": [{"text": "hi"}]}]
 	}`, nil)
 
-	_, _, err := Store(home, filepath.Join(from, "conduct-of-go"))
+	_, _, err := Store(rootOf(home), filepath.Join(from, "conduct-of-go"))
 	if err == nil {
 		t.Fatal("a template took the name of a shipped item")
 	}
@@ -156,7 +160,7 @@ func TestAnItemWhoseDirectoryAndIdDisagreeIsRefused(t *testing.T) {
 	from := t.TempDir()
 	writeItem(t, from, "somewhere-else", customItem, nil)
 
-	if _, _, err := Store(home, filepath.Join(from, "somewhere-else")); err == nil {
+	if _, _, err := Store(rootOf(home), filepath.Join(from, "somewhere-else")); err == nil {
 		t.Fatal("a directory whose name disagrees with its id was imported")
 	}
 }
@@ -165,12 +169,12 @@ func TestAnItemOfYourOwnCannotShadowAShippedOne(t *testing.T) {
 	// Written by hand into the library rather than imported, which is the case the check
 	// in Store cannot see.
 	home := t.TempDir()
-	writeItem(t, LibraryDir(home), "conduct-of-go", `{
+	writeItem(t, LibraryDir(rootOf(home)), "conduct-of-go", `{
 	  "id": "conduct-of-go", "version": 1, "policy": "reuse",
 	  "outputs": [{"root": "agents", "path": "x.md", "content": [{"text": "hi"}]}]
 	}`, nil)
 
-	if _, err := Library(home); err == nil {
+	if _, err := Library(rootOf(home)); err == nil {
 		t.Fatal("a library holding a shipped id was accepted")
 	}
 }
@@ -179,13 +183,13 @@ func TestRemoveTakesItBackOut(t *testing.T) {
 	home := t.TempDir()
 	from := t.TempDir()
 	writeItem(t, from, "my-conventions", customItem, map[string]string{"header.md": "x\n"})
-	if _, _, err := Store(home, filepath.Join(from, "my-conventions")); err != nil {
+	if _, _, err := Store(rootOf(home), filepath.Join(from, "my-conventions")); err != nil {
 		t.Fatalf("Store: %v", err)
 	}
-	if err := Remove(home, "my-conventions"); err != nil {
+	if err := Remove(rootOf(home), "my-conventions"); err != nil {
 		t.Fatalf("Remove: %v", err)
 	}
-	if err := Remove(home, "my-conventions"); err == nil {
+	if err := Remove(rootOf(home), "my-conventions"); err == nil {
 		t.Error("removing something twice was accepted")
 	}
 }

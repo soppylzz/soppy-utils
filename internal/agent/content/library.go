@@ -12,13 +12,14 @@ import (
 	"github.com/soppylzz/soppy-utils/internal/agent/item"
 )
 
-// LibraryDir is where an item somebody wrote lives, under the configuration directory.
+// LibraryDir is where a template somebody wrote lives, under a configuration root the
+// caller has already resolved for this platform.
 //
 // A global library rather than one per project, because a convention somebody holds is
 // theirs and does not stop being true when they change repository. What was generated
 // stays in the project; what can be generated lives here.
-func LibraryDir(home string) string {
-	return filepath.Join(home, ".config", "soppy-utils", "agent", "items")
+func LibraryDir(configRoot string) string {
+	return filepath.Join(configRoot, "agent", "templates")
 }
 
 // Library is every item that can be generated: the ones spu ships, then the ones somebody
@@ -26,7 +27,7 @@ func LibraryDir(home string) string {
 //
 // Sorted by id, and an id that collides is refused rather than resolved. Two items with
 // one name would make `--items` ambiguous, and the ledger records names.
-func Library(home string) ([]item.Source, error) {
+func Library(configRoot string) ([]item.Source, error) {
 	embedded, err := Items()
 	if err != nil {
 		return nil, err
@@ -39,14 +40,14 @@ func Library(home string) ([]item.Source, error) {
 		seen[it.ID] = true
 	}
 
-	custom, err := Custom(home)
+	custom, err := Custom(configRoot)
 	if err != nil {
 		return nil, err
 	}
 	for _, src := range custom {
 		if seen[src.Item.ID] {
 			return nil, fmt.Errorf("an item of your own is called %q, which is also one of "+
-				"spu's; rename it in %s", src.Item.ID, LibraryDir(home))
+				"spu's; rename it in %s", src.Item.ID, LibraryDir(configRoot))
 		}
 		seen[src.Item.ID] = true
 		out = append(out, src)
@@ -60,8 +61,8 @@ func Library(home string) ([]item.Source, error) {
 //
 // A library that is not there is an empty one: most people never add anything, and that
 // is not an error.
-func Custom(home string) ([]item.Source, error) {
-	dir := LibraryDir(home)
+func Custom(configRoot string) ([]item.Source, error) {
+	dir := LibraryDir(configRoot)
 	entries, err := os.ReadDir(dir)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil
@@ -109,7 +110,7 @@ func Load(dir string) (item.Source, error) {
 //
 // The definition is parsed before anything is copied, so a directory that is not an item
 // is refused rather than half-installed and discovered at generation time.
-func Store(home, from string) (item.Source, bool, error) {
+func Store(configRoot, from string) (item.Source, bool, error) {
 	src, err := Load(from)
 	if err != nil {
 		return item.Source{}, false, err
@@ -121,7 +122,7 @@ func Store(home, from string) (item.Source, bool, error) {
 		}
 	}
 
-	dir := filepath.Join(LibraryDir(home), src.Item.ID)
+	dir := filepath.Join(LibraryDir(configRoot), src.Item.ID)
 	replaced := false
 	if _, err := os.Stat(dir); err == nil {
 		replaced = true
@@ -136,8 +137,8 @@ func Store(home, from string) (item.Source, bool, error) {
 }
 
 // Remove takes an item back out of the library.
-func Remove(home, id string) error {
-	dir := filepath.Join(LibraryDir(home), id)
+func Remove(configRoot, id string) error {
+	dir := filepath.Join(LibraryDir(configRoot), id)
 	if _, err := os.Stat(dir); errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("no item of your own is called %q", id)
 	}

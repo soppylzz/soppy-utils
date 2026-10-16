@@ -43,17 +43,17 @@ func (Handler) Run(ctx context.Context, cmd core.Command, reply core.Responder) 
 	}
 	switch sub {
 	case "":
-		return generate(ctx, project, cmd.Session.Home, rest, reply)
+		return generate(ctx, project, configDir(cmd.Session), rest, reply)
 	case "status":
-		return status(project, cmd.Session.Home, rest, reply)
+		return status(project, configDir(cmd.Session), rest, reply)
 	case "edit":
-		return edit(ctx, project, cmd.Session.Home, rest, reply)
+		return edit(ctx, project, configDir(cmd.Session), rest, reply)
 	case "migrate":
-		return migrate(project, cmd.Session.Home, rest, reply)
+		return migrate(project, configDir(cmd.Session), rest, reply)
 	case "import":
-		return importItem(cmd.Session.Home, rest, reply)
+		return importItem(configDir(cmd.Session), rest, reply)
 	case "remove":
-		return removeItem(cmd.Session.Home, rest, reply)
+		return removeItem(configDir(cmd.Session), rest, reply)
 	default:
 		return fmt.Errorf("unknown agent command %q; run spu agent --help", sub)
 	}
@@ -77,12 +77,12 @@ func canonical(project string) string {
 	return harness.Dir(project, item.RootAgents)
 }
 
-func generate(ctx context.Context, project, home string, args []string, reply core.Responder) error {
+func generate(ctx context.Context, project, configRoot string, args []string, reply core.Responder) error {
 	sel, err := parseSelection("agent", args)
 	if err != nil {
 		return err
 	}
-	items, err := content.Library(home)
+	items, err := content.Library(configRoot)
 	if err != nil {
 		return err
 	}
@@ -400,7 +400,7 @@ func stringsOf(v any) []string {
 }
 
 // status reports what the ledger records against what is on disk. It writes nothing.
-func status(project, home string, args []string, reply core.Responder) error {
+func status(project, configRoot string, args []string, reply core.Responder) error {
 	if err := acceptNoFlags("agent status", args); err != nil {
 		return err
 	}
@@ -415,7 +415,7 @@ func status(project, home string, args []string, reply core.Responder) error {
 		return reply.Finish(nil)
 	}
 
-	items, err := content.Library(home)
+	items, err := content.Library(configRoot)
 	if err != nil {
 		return err
 	}
@@ -459,12 +459,12 @@ func status(project, home string, args []string, reply core.Responder) error {
 // It is explicit rather than folded into the ordinary run, because answering a question
 // again is a decision about an item, and the run that collects the whole selection is not
 // the place for a decision about one of them.
-func edit(ctx context.Context, project, home string, args []string, reply core.Responder) error {
+func edit(ctx context.Context, project, configRoot string, args []string, reply core.Responder) error {
 	sel, err := parseSelection("agent edit", args)
 	if err != nil {
 		return err
 	}
-	items, err := content.Library(home)
+	items, err := content.Library(configRoot)
 	if err != nil {
 		return err
 	}
@@ -545,7 +545,7 @@ func edit(ctx context.Context, project, home string, args []string, reply core.R
 // It only ever records what it finds already matching what spu would write: a file that
 // differs is not evidence of anything, and claiming it would let the next run replace
 // something nobody agreed to.
-func migrate(project, home string, args []string, reply core.Responder) error {
+func migrate(project, configRoot string, args []string, reply core.Responder) error {
 	if err := acceptNoFlags("agent migrate", args); err != nil {
 		return err
 	}
@@ -553,7 +553,7 @@ func migrate(project, home string, args []string, reply core.Responder) error {
 	if err != nil {
 		return err
 	}
-	items, err := content.Library(home)
+	items, err := content.Library(configRoot)
 	if err != nil {
 		return err
 	}
@@ -636,7 +636,7 @@ func acceptNoFlags(name string, args []string) error {
 //
 // The definition is read before anything is copied, so a directory that is not an item is
 // refused rather than half-installed and discovered while generating.
-func importItem(home string, args []string, reply core.Responder) error {
+func importItem(configRoot string, args []string, reply core.Responder) error {
 	fs := flag.NewFlagSet("agent import", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	if err := fs.Parse(args); err != nil {
@@ -645,7 +645,7 @@ func importItem(home string, args []string, reply core.Responder) error {
 	if fs.NArg() != 1 {
 		return errors.New("agent import needs one directory holding an item.json")
 	}
-	src, replaced, err := content.Store(home, fs.Arg(0))
+	src, replaced, err := content.Store(configRoot, fs.Arg(0))
 	if err != nil {
 		return err
 	}
@@ -656,7 +656,7 @@ func importItem(home string, args []string, reply core.Responder) error {
 	if err := reply.Notify(fmt.Sprintf("%s %s: %s", what, src.Item.ID, titleOf(src.Item))); err != nil {
 		return err
 	}
-	if err := reply.Notify("it is in " + filepath.Join(content.LibraryDir(home), src.Item.ID)); err != nil {
+	if err := reply.Notify("it is in " + filepath.Join(content.LibraryDir(configRoot), src.Item.ID)); err != nil {
 		return err
 	}
 	return reply.Finish(nil)
@@ -664,7 +664,7 @@ func importItem(home string, args []string, reply core.Responder) error {
 
 // removeItem takes one back out. The documents it generated stay where they are and become
 // the project's, which is what happens to any item that stops being chosen.
-func removeItem(home string, args []string, reply core.Responder) error {
+func removeItem(configRoot string, args []string, reply core.Responder) error {
 	fs := flag.NewFlagSet("agent remove", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	if err := fs.Parse(args); err != nil {
@@ -673,7 +673,7 @@ func removeItem(home string, args []string, reply core.Responder) error {
 	if fs.NArg() != 1 {
 		return errors.New("agent remove needs the id of an item of your own")
 	}
-	if err := content.Remove(home, fs.Arg(0)); err != nil {
+	if err := content.Remove(configRoot, fs.Arg(0)); err != nil {
 		return err
 	}
 	if err := reply.Notify("removed " + fs.Arg(0) + "; documents it generated stay where they are"); err != nil {

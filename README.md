@@ -82,7 +82,7 @@ spu agent import ./my-template     # validate, then copy into the library
 spu agent remove my-conventions    # take it back out
 ```
 
-It is then offered like any other item, in the picker and to `--items`. The library lives at `~/.config/soppy-utils/agent/items/`, globally rather than per project: a convention somebody holds does not stop being true when they change repository.
+It is then offered like any other item, in the picker and to `--items`. The library lives under spu's configuration directory — `~/.config/soppy-utils/agent/templates/` on macOS and Linux, `%APPDATA%\soppy-utils\agent\templates\` on Windows — globally rather than per project: a convention somebody holds does not stop being true when they change repository.
 
 ```jsonc
 // my-template/item.json

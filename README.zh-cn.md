@@ -82,7 +82,7 @@ spu agent import ./my-template     # 先校验，再复制进库
 spu agent remove my-conventions    # 取出来
 ```
 
-之后它就像任何 item 一样被提供 —— 在选择器里，也能用 `--items`。库存放在 `~/.config/soppy-utils/agent/items/`，是**全局**而非按项目的：一个人持有的约定不会因为换了仓库就不成立。
+之后它就像任何 item 一样被提供 —— 在选择器里，也能用 `--items`。库存放在 spu 的配置目录下 —— macOS/Linux 是 `~/.config/soppy-utils/agent/templates/`，Windows 是 `%APPDATA%\soppy-utils\agent\templates\` —— 是**全局**而非按项目的：一个人持有的约定不会因为换了仓库就不成立。
 
 ```jsonc
 // my-template/item.json
