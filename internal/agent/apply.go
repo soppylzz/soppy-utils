@@ -17,21 +17,28 @@ import (
 // contain is exactly "the outputs spu wrote and still stands behind": an item whose files
 // were all refused or left as somebody else's is not one of them, and an item that was
 // generated before and is unchanged still is.
-func Apply(ctx context.Context, project string, steps []Step, led ledger.Ledger, reply core.Responder) (ledger.Ledger, error) {
+func Apply(ctx context.Context, project string, steps []Step, led ledger.Ledger,
+	keep []string, reply core.Responder) (ledger.Ledger, error) {
 	out := ledger.Ledger{Version: ledger.CurrentVersion}
 
-	// An item that is still in this run keeps its answers, so a run that changes nothing
-	// does not forget what was answered. An item that was not chosen this time is dropped
-	// from the record: its file stays where it is, but spu stops claiming it, which is
-	// what lets a person take a document over by no longer selecting it.
+	// Which entries survive is decided by the caller rather than by which files this run
+	// happened to touch. Choosing everything and re-answering one item are different
+	// questions: the first is a selection, where an item left out is being handed over,
+	// and the second is a revision, where every other item is simply not this command's
+	// business. Deriving it from the steps made editing one item drop every other item's
+	// record, so the next run refused to write files spu had generated itself.
 	for _, it := range led.Items {
-		if !considered(steps, it.ID) {
+		if !inList(keep, it.ID) {
 			continue
 		}
 		out.Items = append(out.Items, ledger.Item{
 			ID:          it.ID,
 			ItemVersion: it.ItemVersion,
 			Answers:     it.Answers,
+			// The outputs carry the hashes, and a hash is what makes a file spu's. An
+			// item carried forward without them stays in the ledger while none of its
+			// files does, so the next run reads its own output as somebody else's.
+			Outputs: it.Outputs,
 		})
 	}
 
@@ -61,10 +68,10 @@ func Apply(ctx context.Context, project string, steps []Step, led ledger.Ledger,
 	return out, nil
 }
 
-// considered reports whether an item was part of the run.
-func considered(steps []Step, id string) bool {
-	for _, step := range steps {
-		if step.Item.ID == id {
+// inList reports whether an id is among those whose record survives.
+func inList(ids []string, id string) bool {
+	for _, have := range ids {
+		if have == id {
 			return true
 		}
 	}
@@ -121,7 +128,19 @@ func record(out *ledger.Ledger, step Step) {
 			continue
 		}
 		out.Items[i].ItemVersion = step.Item.Version
-		out.Items[i].Outputs = append(out.Items[i].Outputs, entry)
+		// Replaced rather than appended: an item writes one file at one path, and an item
+		// carried forward already has that path recorded.
+		replaced := false
+		for j := range out.Items[i].Outputs {
+			if out.Items[i].Outputs[j].Path == step.Rel {
+				out.Items[i].Outputs[j] = entry
+				replaced = true
+				break
+			}
+		}
+		if !replaced {
+			out.Items[i].Outputs = append(out.Items[i].Outputs, entry)
+		}
 		return
 	}
 	out.Items = append(out.Items, ledger.Item{

@@ -32,7 +32,7 @@ func TestApplyWritesAndRecordsTheHash(t *testing.T) {
 	steps := plan(t, project, "reuse", "overwrite", ledger.Ledger{Version: ledger.CurrentVersion})
 	reply := &coretest.Recorder{Askable: true}
 
-	got, err := Apply(context.Background(), project, steps, ledger.Ledger{Version: ledger.CurrentVersion}, reply)
+	got, err := Apply(context.Background(), project, steps, ledger.Ledger{Version: ledger.CurrentVersion}, []string{"one"}, reply)
 	if err != nil {
 		t.Fatalf("Apply: %v", err)
 	}
@@ -73,7 +73,7 @@ func TestApplyRefusesAFileItDidNotWrite(t *testing.T) {
 	steps := plan(t, project, "reuse", "overwrite", ledger.Ledger{Version: ledger.CurrentVersion})
 	reply := &coretest.Recorder{Askable: true}
 
-	got, err := Apply(context.Background(), project, steps, ledger.Ledger{Version: ledger.CurrentVersion}, reply)
+	got, err := Apply(context.Background(), project, steps, ledger.Ledger{Version: ledger.CurrentVersion}, []string{"one"}, reply)
 	if err != nil {
 		t.Fatalf("Apply: %v", err)
 	}
@@ -105,7 +105,7 @@ func TestApplyRecordsNothingForAFileItLeftAlone(t *testing.T) {
 	steps := plan(t, project, "skip", "refuse", ledger.Ledger{Version: ledger.CurrentVersion})
 	reply := &coretest.Recorder{Askable: true}
 
-	got, err := Apply(context.Background(), project, steps, ledger.Ledger{Version: ledger.CurrentVersion}, reply)
+	got, err := Apply(context.Background(), project, steps, ledger.Ledger{Version: ledger.CurrentVersion}, []string{"one"}, reply)
 	if err != nil {
 		t.Fatalf("Apply: %v", err)
 	}
@@ -132,7 +132,7 @@ func TestAnAskWithNobodyToAnswerIsARefusal(t *testing.T) {
 	steps := plan(t, project, "reuse", "ask", led)
 	reply := &coretest.Recorder{} // cannot ask
 
-	if _, err := Apply(context.Background(), project, steps, led, reply); err != nil {
+	if _, err := Apply(context.Background(), project, steps, led, []string{"one"}, reply); err != nil {
 		t.Fatalf("Apply: %v", err)
 	}
 	body, _ := os.ReadFile(steps[0].Path)
@@ -157,7 +157,7 @@ func TestAnAskThatIsAnsweredYesWrites(t *testing.T) {
 	steps := plan(t, project, "reuse", "ask", led)
 	reply := &coretest.Recorder{Askable: true, Confirms: []bool{true}}
 
-	if _, err := Apply(context.Background(), project, steps, led, reply); err != nil {
+	if _, err := Apply(context.Background(), project, steps, led, []string{"one"}, reply); err != nil {
 		t.Fatalf("Apply: %v", err)
 	}
 	body, _ := os.ReadFile(steps[0].Path)
@@ -191,7 +191,7 @@ func TestApplyLeavesAnUnchangedFileUntouched(t *testing.T) {
 		t.Fatalf("the plan did not leave it alone: %+v", steps[0].Decision)
 	}
 
-	got, err := Apply(context.Background(), project, steps, led, &coretest.Recorder{Askable: true})
+	got, err := Apply(context.Background(), project, steps, led, []string{"one"}, &coretest.Recorder{Askable: true})
 	if err != nil {
 		t.Fatalf("Apply: %v", err)
 	}

@@ -621,3 +621,66 @@ func TestEditWorksWithoutATerminalWhenTheAnswersAreGiven(t *testing.T) {
 		t.Error("the answers given to edit were not applied")
 	}
 }
+
+func TestEditingOneItemKeepsEveryOtherRecord(t *testing.T) {
+	// A revision is not a selection. Deriving the surviving records from which files this
+	// run touched dropped every other item, and the next run then disowned its own output
+	// — calling a file it had written "not written by spu" and refusing to touch it.
+	project := t.TempDir()
+	if err := run(t, project, &coretest.Recorder{},
+		"--items", "conduct-of-go,soppy-excalidraw", "--harnesses", "claude"); err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+
+	answers := filepath.Join(t.TempDir(), "edit.json")
+	if err := os.WriteFile(answers, []byte(`{"answers":{"conduct-of-go":{}}}`), 0o644); err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+	if err := run(t, project, &coretest.Recorder{},
+		"edit", "--items", "conduct-of-go", "--answers", answers); err != nil {
+		t.Fatalf("edit: %v", err)
+	}
+
+	led, err := readLedger(project)
+	if err != nil {
+		t.Fatalf("readLedger: %v", err)
+	}
+	for _, id := range []string{"conduct-of-go", "soppy-excalidraw", "spu-index", "spu-mcp"} {
+		if _, ok := led.Find(id); !ok {
+			t.Errorf("editing one item dropped %q from the record", id)
+		}
+	}
+
+	// And a later run recognises what is on disk as its own.
+	after := &coretest.Recorder{Askable: true, Answers: map[string]any{
+		"items": []any{"conduct-of-go", "soppy-excalidraw"}, "harnesses": []any{"claude"}}}
+	if err := run(t, project, after); err != nil {
+		t.Fatalf("the run after an edit: %v", err)
+	}
+	if said := strings.Join(after.Warnings, " "); strings.Contains(said, "not written by spu") {
+		t.Errorf("a run disowned its own output after an edit:\n%s", said)
+	}
+}
+
+func TestChoosingAgainDropsWhatWasNotChosen(t *testing.T) {
+	// The other half of the same decision: `spu agent` is a selection, so an item left out
+	// of it is being handed over. Only `edit` keeps everything.
+	project := t.TempDir()
+	if err := run(t, project, &coretest.Recorder{}, "--items", "conduct-of-go,conduct-of-docs"); err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+	if err := run(t, project, &coretest.Recorder{}, "--items", "conduct-of-go"); err != nil {
+		t.Fatalf("second generate: %v", err)
+	}
+
+	led, err := readLedger(project)
+	if err != nil {
+		t.Fatalf("readLedger: %v", err)
+	}
+	if _, ok := led.Find("conduct-of-docs"); ok {
+		t.Error("an item that was no longer chosen is still recorded as spu's")
+	}
+	if _, err := os.Stat(filepath.Join(canonical(project), "prompts", "conduct-of-docs.md")); err != nil {
+		t.Errorf("the file should stay where it is, and it did not: %v", err)
+	}
+}

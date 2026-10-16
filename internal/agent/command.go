@@ -136,7 +136,7 @@ func generate(ctx context.Context, project string, args []string, reply core.Res
 	}
 	steps = append(steps, idx)
 
-	next, err := Apply(ctx, project, steps, led, reply)
+	next, err := Apply(ctx, project, steps, led, chosen, reply)
 	if err != nil {
 		return err
 	}
@@ -490,7 +490,15 @@ func edit(ctx context.Context, project string, args []string, reply core.Respond
 	if err != nil {
 		return err
 	}
-	next, err := Apply(ctx, project, steps, led, reply)
+	// Every recorded item survives an edit, not only the one being re-answered: a
+	// revision is not a selection, and the others are not this command's business.
+	// Deriving the survivors from which files this run touched dropped every other
+	// item's record, so the next run refused to write files spu had generated itself.
+	recorded := make([]string, 0, len(led.Items))
+	for _, it := range led.Items {
+		recorded = append(recorded, it.ID)
+	}
+	next, err := Apply(ctx, project, steps, led, recorded, reply)
 	if err != nil {
 		return err
 	}
