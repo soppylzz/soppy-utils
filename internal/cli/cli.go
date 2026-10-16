@@ -38,8 +38,8 @@ import (
 // is the property the three hand-maintained lists of the previous dispatcher did not
 // have, and a test checks it.
 //
-// A util joins this list when it moves onto core. git is still on the direct path
-// below, and leaves that switch when it arrives here.
+// Every util is here. vscode is the exception and lives in Bash, because it only opens
+// files with the code command and has nothing for core to own.
 var utils = []struct {
 	id       string
 	register func(*registry.Registry) error
@@ -47,6 +47,7 @@ var utils = []struct {
 }{
 	{id: "welcome", register: welcome.Register, handler: welcome.Handler{}},
 	{id: "license", register: license.Register, handler: license.Handler{}},
+	{id: "git", register: gitconfig.Register, handler: gitconfig.Handler{}},
 }
 
 // Main runs one invocation and returns the status the process should exit with.
@@ -83,10 +84,6 @@ func run(args []string, version string) (int, error) {
 
 	case "config-status":
 		return 0, configStatus(home)
-
-	case "git":
-		// Not moved onto core yet. Slice 2 takes it, and this branch goes with it.
-		return 0, gitconfig.Run(home, args[1:])
 	}
 
 	// Everything core knows about goes to core. Asking the same list the registry is

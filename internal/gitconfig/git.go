@@ -2,11 +2,13 @@ package gitconfig
 
 import (
 	"bytes"
+	"context"
 	"embed"
 	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,11 +16,10 @@ import (
 	"sort"
 	"strings"
 
-	"charm.land/huh/v2"
-	"github.com/soppylzz/soppy-utils/internal/clioutput"
 	"github.com/soppylzz/soppy-utils/internal/configstore"
+	"github.com/soppylzz/soppy-utils/internal/core"
+	"github.com/soppylzz/soppy-utils/internal/form"
 	"github.com/soppylzz/soppy-utils/internal/managedfile"
-	"github.com/soppylzz/soppy-utils/internal/ui"
 )
 
 //go:embed schema.json schema-v0.json
@@ -195,7 +196,7 @@ func legacyRender(crlf string) []byte {
 	b.WriteString("[diff]\n    tool = vscode\n[merge]\n    tool = vscode\n[mergetool \"vscode\"]\n    cmd = code --wait --merge \"$LOCAL\" \"$REMOTE\" \"$BASE\" \"$MERGED\"\n[difftool \"vscode\"]\n    cmd = code --wait --diff \"$LOCAL\" \"$REMOTE\"\n")
 	return b.Bytes()
 }
-func install(s configstore.Store, data map[string]any) error {
+func install(s configstore.Store, data map[string]any, reply core.Responder) error {
 	if err := s.Validate(data); err != nil {
 		return err
 	}
@@ -233,11 +234,11 @@ func install(s configstore.Store, data map[string]any) error {
 				return fmt.Errorf("git include: %s: %w", strings.TrimSpace(string(b)), err)
 			}
 		}
-		clioutput.Info("git", "installed global defaults")
+		reply.Notify("git: installed global defaults")
 		return nil
 	})
 }
-func uninstall(s configstore.Store, purge bool) error {
+func uninstall(s configstore.Store, purge bool, reply core.Responder) error {
 	if err := checkOwned(s); err != nil {
 		return err
 	}
@@ -262,30 +263,38 @@ func uninstall(s configstore.Store, purge bool) error {
 	return nil
 }
 
-func Run(home string, args []string) error {
+// Run performs one git command.
+//
+// It writes what it wants shown and asks through reply; it never touches a terminal
+// itself. Git stays the authority for the configuration: this writes a managed file and
+// asks git to include it.
+func Run(ctx context.Context, session core.Session, args []string, out io.Writer, reply core.Responder) error {
+	home := session.Home
 	s := Store(home)
 	v := s.Read()
 	if v.Warning != "" {
-		clioutput.Warn("git", v.Warning)
+		if err := reply.Notify("git: " + v.Warning); err != nil {
+			return err
+		}
 	}
 	if len(args) == 0 {
-		fmt.Println("git: install, uninstall, edit, migrate, status")
+		fmt.Fprintln(out, "git: install, uninstall, edit, migrate, status")
 		return nil
 	}
 	switch args[0] {
 	case "-h":
-		fmt.Println("git: manage global Git defaults")
+		fmt.Fprintln(out, "git: manage global Git defaults")
 		return nil
 	case "--help":
-		fmt.Println("Usage: spu git install|uninstall [--purge]|edit|migrate|status")
+		fmt.Fprintln(out, "Usage: spu git install|uninstall [--purge]|edit|migrate|status")
 		return nil
 	case "status":
 		entries, err := includes()
 		if err != nil {
 			return err
 		}
-		fmt.Printf("config contract: %d (required %d)\n", v.StoredVersion, s.Current)
-		fmt.Printf("global include: %t\n", included(entries, configPath(home)))
+		fmt.Fprintf(out, "config contract: %d (required %d)\n", v.StoredVersion, s.Current)
+		fmt.Fprintf(out, "global include: %t\n", included(entries, configPath(home)))
 		return nil
 	case "uninstall":
 		if len(args) > 2 || len(args) == 2 && args[1] != "--purge" {
@@ -294,7 +303,7 @@ func Run(home string, args []string) error {
 		if len(args) == 2 && !v.Writable {
 			return errors.New("cannot purge conflicted or future config")
 		}
-		return managedfile.WithLock(filepath.Dir(configPath(home)), func() error { return uninstall(s, len(args) == 2) })
+		return managedfile.WithLock(filepath.Dir(configPath(home)), func() error { return uninstall(s, len(args) == 2, reply) })
 	case "install", "edit", "migrate":
 	default:
 		return fmt.Errorf("unknown git action %q", args[0])
@@ -310,6 +319,9 @@ func Run(home string, args []string) error {
 		return errors.New("cannot write with conflicted or future config")
 	}
 	fs := flag.NewFlagSet("git", flag.ContinueOnError)
+	// The message belongs on the client's stderr, and it gets there as the returned
+	// error. Writing it here would put it in the daemon's log instead.
+	fs.SetOutput(io.Discard)
 	answers := fs.String("answers", "", "")
 	editor := fs.String("editor", v.Data["editor"].(string), "")
 	crlf := fs.String("autocrlf", v.Data["autocrlf"].(string), "")
@@ -331,33 +343,39 @@ func Run(home string, args []string) error {
 				return managedfile.WithLock(filepath.Dir(configPath(home)), func() error { return s.Save(data) })
 			}
 		}
-		return install(s, data)
+		return install(s, data, reply)
 	}
-	aliases := v.Data["aliases"].(map[string]any)
-	aliasJSON, _ := json.MarshalIndent(aliases, "", "  ")
-	aliasText := string(aliasJSON)
-	if (args[0] == "edit" || args[0] == "migrate") && ui.Available() {
-		if err := ui.Run(huh.NewGroup(
-			huh.NewInput().Title("Git editor command").Value(editor),
-			huh.NewSelect[string]().Title("core.autocrlf").Options(huh.NewOption("input", "input"), huh.NewOption("true", "true"), huh.NewOption("false", "false")).Value(crlf),
-			huh.NewInput().Title("Diff tool").Value(diff), huh.NewInput().Title("Merge tool").Value(merge),
-			huh.NewText().Title("Aliases (JSON object)").Value(&aliasText),
-		)); err != nil {
+
+	data := map[string]any{}
+	for key, value := range v.Data {
+		data[key] = value
+	}
+	data["editor"], data["autocrlf"] = *editor, *crlf
+	data["diff_tool"], data["merge_tool"] = *diff, *merge
+
+	if (args[0] == "edit" || args[0] == "migrate") && reply.CanAsk() {
+		// The form is the schema's, so the aliases arrive as a map rather than as a blob
+		// of JSON a text box handed back for this code to parse.
+		spec, err := form.FromSchema(s.Schema, data)
+		if err != nil {
 			return err
 		}
-		if err := json.Unmarshal([]byte(aliasText), &aliases); err != nil {
-			return fmt.Errorf("aliases: %w", err)
+		answered, err := reply.Ask(ctx, spec)
+		if err != nil {
+			return err
+		}
+		for key, value := range answered {
+			data[key] = value
 		}
 	}
-	data := map[string]any{"editor": *editor, "autocrlf": *crlf, "diff_tool": *diff, "merge_tool": *merge, "aliases": aliases}
 	if args[0] == "migrate" {
 		if _, err := os.Stat(configPath(home)); err == nil {
-			return install(s, data)
+			return install(s, data, reply)
 		}
 		return managedfile.WithLock(filepath.Dir(configPath(home)), func() error { return s.Save(data) })
 	}
-	if args[0] == "edit" && !ui.Available() && len(args) == 1 {
+	if args[0] == "edit" && !reply.CanAsk() && len(args) == 1 {
 		return errors.New("interactive terminal required")
 	}
-	return install(s, data)
+	return install(s, data, reply)
 }

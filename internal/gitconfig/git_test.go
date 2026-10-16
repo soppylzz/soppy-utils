@@ -1,11 +1,15 @@
 package gitconfig
 
 import (
+	"context"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/soppylzz/soppy-utils/internal/core/coretest"
 )
 
 func TestGlobalIncludeLifecycleAndOwnership(t *testing.T) {
@@ -14,10 +18,11 @@ func TestGlobalIncludeLifecycleAndOwnership(t *testing.T) {
 	}
 	home := t.TempDir()
 	t.Setenv("GIT_CONFIG_GLOBAL", filepath.Join(home, "global.gitconfig"))
-	if err := Run(home, []string{"install"}); err != nil {
+	noTerminal := func() *coretest.Recorder { return &coretest.Recorder{} }
+	if err := Run(context.Background(), sessionFor(home), []string{"install"}, io.Discard, noTerminal()); err != nil {
 		t.Fatal(err)
 	}
-	if err := Run(home, []string{"install"}); err != nil {
+	if err := Run(context.Background(), sessionFor(home), []string{"install"}, io.Discard, noTerminal()); err != nil {
 		t.Fatal(err)
 	}
 	b, err := git("config", "--global", "--get-all", "include.path")
@@ -35,14 +40,14 @@ func TestGlobalIncludeLifecycleAndOwnership(t *testing.T) {
 	if err := os.WriteFile(path, append(original, []byte("# user edit\n")...), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if err := Run(home, []string{"uninstall"}); err == nil {
+	if err := Run(context.Background(), sessionFor(home), []string{"uninstall"}, io.Discard, noTerminal()); err == nil {
 		t.Fatal("modified managed file was removed")
 	}
 	if err := os.WriteFile(path, original, 0600); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := Run(home, []string{"uninstall"}); err != nil {
+	if err := Run(context.Background(), sessionFor(home), []string{"uninstall"}, io.Discard, noTerminal()); err != nil {
 		t.Fatal(err)
 	}
 
