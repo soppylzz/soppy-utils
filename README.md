@@ -65,6 +65,24 @@ spu agent status           # what is generated, missing, or changed
 spu agent edit             # answer one item's questions again
 ```
 
+Every command also takes flags, so a script can do what a person does. Naming the items is answering the picker's question, so it is not asked again; an answer nobody gave is taken from the item's declared default and reported.
+
+```sh
+spu agent --items conduct-of-commit,soppy-excalidraw --harnesses claude,pi
+spu agent --answers answers.json      # selection and answers, for automation
+spu agent edit --items conduct-of-go --answers answers.json
+```
+
+`--answers` reads one JSON object holding the whole run:
+
+```json
+{
+  "items": ["conduct-of-commit"],
+  "harnesses": ["claude"],
+  "answers": { "conduct-of-commit": { "lint-commits": true } }
+}
+```
+
 `spu agent` also writes `.agents/SPU.md`, which explains what is generated and lists every generated document as an `@` reference. Reference it once from the project's instruction file:
 
 ```markdown

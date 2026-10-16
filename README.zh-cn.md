@@ -65,6 +65,24 @@ spu agent status           # 已生成、缺失、已改动
 spu agent edit             # 重新回答某个 item 的问题
 ```
 
+所有命令同样支持参数，脚本能做人能做的事。指定 item 就是在回答选择器要问的问题，因此不会再问；没人给出的答案取自 item 声明的默认值，并会明确报告。
+
+```sh
+spu agent --items conduct-of-commit,soppy-excalidraw --harnesses claude,pi
+spu agent --answers answers.json      # 选择与答案，供自动化使用
+spu agent edit --items conduct-of-go --answers answers.json
+```
+
+`--answers` 读取一个包含整次运行的 JSON 对象：
+
+```json
+{
+  "items": ["conduct-of-commit"],
+  "harnesses": ["claude"],
+  "answers": { "conduct-of-commit": { "lint-commits": true } }
+}
+```
+
 `spu agent` 还会写 `.agents/SPU.md`，它说明生成了什么，并把每一份生成文档列为一条 `@` 引用。在项目的指令文件里引用一次即可：
 
 ```markdown
