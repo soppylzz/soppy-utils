@@ -69,7 +69,14 @@ func utilHelpFor(r *registry.Registry, out io.Writer, id string) error {
 	fmt.Fprintln(out, c.Usage)
 	fmt.Fprintln(out)
 	for _, cmd := range c.Commands {
-		fmt.Fprintf(out, "  %s\n", cmd.Name)
+		// A capability's main command has no name of its own — it is the util — so the
+		// usage line stands in for it. Printing an empty name left a blank line where the
+		// most-used command's summary should be.
+		if cmd.Name == "" {
+			fmt.Fprintf(out, "  %s\n", c.ID)
+		} else {
+			fmt.Fprintf(out, "  %s %s\n", c.ID, cmd.Name)
+		}
 		if cmd.Summary != "" {
 			fmt.Fprintf(out, "      %s\n", cmd.Summary)
 		}
@@ -86,8 +93,14 @@ func flagText(f registry.Flag) string {
 	switch f.Arg {
 	case "", "bool":
 		// Nothing to supply.
-	case "enum":
-		text += " <" + strings.Join(f.Options, "|") + ">"
+	case "enum", "list":
+		// A list takes several of them, but the values are the same list either way, and
+		// a flag whose values are only in the error message is a flag nobody uses.
+		if len(f.Options) > 0 {
+			text += " <" + strings.Join(f.Options, "|") + ">"
+		} else {
+			text += " <" + f.Arg + ">"
+		}
 	default:
 		text += " <" + f.Arg + ">"
 	}

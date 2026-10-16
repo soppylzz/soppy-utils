@@ -18,7 +18,21 @@ func Register(r *registry.Registry) error {
 }
 
 var commands = []registry.Command{
-	{Name: "edit", Summary: "Change the saved defaults"},
+	{Name: "", Summary: "Write a license to stdout, or to a file with --output",
+		Flags: []registry.Flag{
+			{Name: "--mit", Arg: "bool", Summary: "Write the MIT license"},
+			{Name: "--isc", Arg: "bool", Summary: "Write the ISC license"},
+			{Name: "-M", Arg: "bool", Summary: "Short for --mit"},
+			{Name: "-I", Arg: "bool", Summary: "Short for --isc"},
+			{Name: "--name", Arg: "string", Summary: "The copyright holder"},
+			{Name: "--year", Arg: "string", Summary: "The copyright year"},
+			{Name: "--output", Arg: "path", Summary: "Write to this file instead of stdout"},
+			{Name: "-o", Arg: "path", Summary: "Short for --output"},
+			{Name: "--interactive", Arg: "bool", Summary: "Open the form even when the flags are complete"},
+		}},
+	{Name: "edit", Summary: "Change the saved defaults", Flags: []registry.Flag{
+		{Name: "--answers", Arg: "path", Summary: "Read the values from a file instead of asking"},
+	}},
 	{Name: "migrate", Summary: "Adopt an older configuration", Flags: []registry.Flag{
 		{Name: "--answers", Arg: "path", Summary: "Read the values from a file instead of asking"},
 	}},
