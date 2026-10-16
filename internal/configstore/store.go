@@ -24,7 +24,7 @@ type Store struct {
 	Defaults   map[string]any
 }
 
-type Envelope struct {
+type envelope struct {
 	Util          string         `json:"util"`
 	SchemaVersion int            `json:"schema_version"`
 	Data          map[string]any `json:"data"`
@@ -57,10 +57,10 @@ func copyMap(m map[string]any) map[string]any {
 }
 
 func (s Store) Validate(data map[string]any) error {
-	return validateEnvelope(s.Schema, Envelope{Util: s.Util, SchemaVersion: s.Current, Data: data})
+	return validateEnvelope(s.Schema, envelope{Util: s.Util, SchemaVersion: s.Current, Data: data})
 }
 
-func validateEnvelope(schemaBytes []byte, env Envelope) error {
+func validateEnvelope(schemaBytes []byte, env envelope) error {
 	var raw any
 	if err := json.Unmarshal(schemaBytes, &raw); err != nil {
 		return err
@@ -91,7 +91,7 @@ func (s Store) Read() View {
 		return v
 	}
 	n, err := strconv.Atoi(strings.TrimSpace(string(marker)))
-	var env Envelope
+	var env envelope
 	if err != nil || json.Unmarshal(raw, &env) != nil || env.Util != s.Util || n != env.SchemaVersion || n < 0 {
 		v.Writable = false
 		v.Warning = "VERSION/config.json conflict or malformed config; run 'spu " + s.Util + " migrate'"
@@ -148,7 +148,7 @@ func (s Store) Save(data map[string]any) error {
 	if err := os.MkdirAll(s.Dir(), 0700); err != nil {
 		return err
 	}
-	env := Envelope{Util: s.Util, SchemaVersion: s.Current, Data: data}
+	env := envelope{Util: s.Util, SchemaVersion: s.Current, Data: data}
 	b, err := json.MarshalIndent(env, "", "  ")
 	if err != nil {
 		return err
@@ -182,7 +182,7 @@ func (s Store) LoadAnswers(path string) (map[string]any, error) {
 	if len(b) > 1024*1024 {
 		return nil, errors.New("answers file is too large")
 	}
-	var env Envelope
+	var env envelope
 	if err := json.Unmarshal(b, &env); err != nil {
 		return nil, err
 	}

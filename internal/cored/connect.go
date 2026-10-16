@@ -58,7 +58,7 @@ func (e rpcError) Error() string {
 // installed binary is not what this client expects, and starting it again cannot fix
 // that.
 func Connect(ctx context.Context, opts AttachOptions) (*Conn, error) {
-	conn, err := Attach(ctx, opts)
+	conn, err := attach(ctx, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -81,7 +81,7 @@ func Connect(ctx context.Context, opts AttachOptions) (*Conn, error) {
 		return nil, fmt.Errorf("stop the out-of-date core: %w", err)
 	}
 
-	conn, err = Attach(ctx, opts)
+	conn, err = attach(ctx, opts)
 	if err != nil {
 		return nil, err
 	}

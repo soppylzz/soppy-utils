@@ -68,8 +68,8 @@ func Store(home string) configstore.Store {
 	}
 }
 
-// ShellQuote encodes data as one Bash single-quoted word.
-func ShellQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", "'\"'\"'") + "'" }
+// shellQuote encodes data as one Bash single-quoted word.
+func shellQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", "'\"'\"'") + "'" }
 
 // bannerInTmux reports whether the banner prints inside tmux.
 //
@@ -80,7 +80,7 @@ func bannerInTmux(data map[string]any) bool {
 	return inTmux
 }
 
-func Render(data map[string]any) ([]byte, error) {
+func render(data map[string]any) ([]byte, error) {
 	body, err := assets.ReadFile("templates/banner.sh.tmpl")
 	if err != nil {
 		return nil, err
@@ -109,7 +109,7 @@ if [[ ! -t 0 && ! -t 1 && ! -t 2 ]] && ! (: </dev/tty) 2>/dev/null; then exit 0;
 		if !ok {
 			return nil, fmt.Errorf("invalid %s", key)
 		}
-		fmt.Fprintf(&out, "_spu_welcome_%s=%s\n", key, ShellQuote(v))
+		fmt.Fprintf(&out, "_spu_welcome_%s=%s\n", key, shellQuote(v))
 	}
 	if err := t.Execute(&out, nil); err != nil {
 		return nil, err
@@ -256,7 +256,7 @@ func install(s configstore.Store, data map[string]any, reply core.Responder) err
 			return fmt.Errorf("%s: %w", kind, err)
 		}
 	}
-	rendered, err := Render(data)
+	rendered, err := render(data)
 	if err != nil {
 		return err
 	}

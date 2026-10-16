@@ -18,13 +18,13 @@ func bannerData(inTmux bool) map[string]any {
 }
 
 func TestRenderCarriesTheTmuxDecision(t *testing.T) {
-	off, err := Render(bannerData(false))
+	off, err := render(bannerData(false))
 	if err != nil {
-		t.Fatalf("Render: %v", err)
+		t.Fatalf("render: %v", err)
 	}
-	on, err := Render(bannerData(true))
+	on, err := render(bannerData(true))
 	if err != nil {
-		t.Fatalf("Render: %v", err)
+		t.Fatalf("render: %v", err)
 	}
 
 	// Baked into the script rather than looked up at startup: the generated banner runs
@@ -39,13 +39,13 @@ func TestRenderCarriesTheTmuxDecision(t *testing.T) {
 }
 
 func TestTheBannerStaysQuietInsideTmuxUnlessItWasAskedFor(t *testing.T) {
-	off, err := Render(bannerData(false))
+	off, err := render(bannerData(false))
 	if err != nil {
-		t.Fatalf("Render: %v", err)
+		t.Fatalf("render: %v", err)
 	}
-	on, err := Render(bannerData(true))
+	on, err := render(bannerData(true))
 	if err != nil {
-		t.Fatalf("Render: %v", err)
+		t.Fatalf("render: %v", err)
 	}
 	inTmux := "TMUX=/tmp/fake-tmux,1,0"
 

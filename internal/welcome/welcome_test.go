@@ -15,7 +15,7 @@ func TestRenderQuotesInputAndStaysSilentWithoutTTY(t *testing.T) {
 	dir := t.TempDir()
 	sentinel := filepath.Join(dir, "should-not-exist")
 	data := map[string]any{"name": "'$(touch " + sentinel + ")", "device": "a\nb", "message": "$HOME `whoami`"}
-	script, err := Render(data)
+	script, err := render(data)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -35,7 +35,7 @@ func TestRenderQuotesInputAndStaysSilentWithoutTTY(t *testing.T) {
 	if _, err := os.Stat(sentinel); !os.IsNotExist(err) {
 		t.Fatal("input was executed")
 	}
-	if !strings.Contains(string(script), ShellQuote(data["name"].(string))) {
+	if !strings.Contains(string(script), shellQuote(data["name"].(string))) {
 		t.Fatal("name is not shell quoted")
 	}
 	assignments := []string{}
@@ -60,7 +60,7 @@ func TestRenderQuotesInputAndStaysSilentWithoutTTY(t *testing.T) {
 func TestRenderWithRedirectedStreamsAndControllingTTY(t *testing.T) {
 	// The banner has to survive stdout being redirected, because Powerlevel10k's instant
 	// prompt does exactly that while the shell loads its startup file.
-	banner, err := Render(map[string]any{"name": "Alice", "device": "Mac", "message": "Ready"})
+	banner, err := render(map[string]any{"name": "Alice", "device": "Mac", "message": "Ready"})
 	if err != nil {
 		t.Fatal(err)
 	}

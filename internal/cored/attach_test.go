@@ -88,12 +88,12 @@ func shortDir(t *testing.T) string {
 // reason a spawned daemon never answered is in that file.
 func attachForTest(t *testing.T, opts AttachOptions) net.Conn {
 	t.Helper()
-	conn, err := Attach(context.Background(), opts)
+	conn, err := attach(context.Background(), opts)
 	if err != nil {
 		if body, readErr := os.ReadFile(opts.LogPath); readErr == nil {
-			t.Fatalf("Attach: %v\ndaemon log:\n%s", err, body)
+			t.Fatalf("attach: %v\ndaemon log:\n%s", err, body)
 		}
-		t.Fatalf("Attach: %v", err)
+		t.Fatalf("attach: %v", err)
 	}
 	t.Cleanup(func() { conn.Close() })
 	return conn
@@ -128,7 +128,7 @@ func TestAttachUsesADaemonThatIsAlreadyRunning(t *testing.T) {
 	// A second daemon would fight the first over the same state, and the spawn would
 	// have left its report behind.
 	if _, err := os.Stat(report); err == nil {
-		t.Error("Attach started a daemon even though one was already listening")
+		t.Error("attach started a daemon even though one was already listening")
 	}
 }
 
@@ -194,17 +194,17 @@ func TestAttachGivesUpWhenTheSpawnedDaemonNeverAnswers(t *testing.T) {
 	started := time.Now()
 	// A command that runs and exits without ever listening. Waiting forever here would
 	// hang every spu command, so the budget is what turns it into a diagnosable error.
-	_, err = Attach(context.Background(), AttachOptions{
+	_, err = attach(context.Background(), AttachOptions{
 		Endpoint: ep,
 		Spawn:    []string{os.Args[0], "-test.run=^$"},
 		LogPath:  filepath.Join(shortDir(t), "core.log"),
 		Budget:   300 * time.Millisecond,
 	})
 	if err == nil {
-		t.Fatal("Attach succeeded with no daemon, want an error")
+		t.Fatal("attach succeeded with no daemon, want an error")
 	}
 	if elapsed := time.Since(started); elapsed > 5*time.Second {
-		t.Errorf("Attach took %s to give up, want the budget to bound it", elapsed)
+		t.Errorf("attach took %s to give up, want the budget to bound it", elapsed)
 	}
 }
 
@@ -217,12 +217,12 @@ func TestAttachReportsThatNoDaemonCouldBeStarted(t *testing.T) {
 
 	// No spawn command at all: a caller that must not start processes has to be able
 	// to say so, and must get an error rather than a hang.
-	_, err = Attach(context.Background(), AttachOptions{
+	_, err = attach(context.Background(), AttachOptions{
 		Endpoint: ep,
 		Budget:   time.Second,
 	})
 	if err == nil {
-		t.Fatal("Attach succeeded with nothing to attach to and nothing to start, want an error")
+		t.Fatal("attach succeeded with nothing to attach to and nothing to start, want an error")
 	}
 }
 

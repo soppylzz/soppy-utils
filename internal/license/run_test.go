@@ -142,9 +142,9 @@ func TestAOneShotLicenseAsksNothing(t *testing.T) {
 	if len(r.Asked) != 0 || len(r.Questions) != 0 {
 		t.Errorf("asked %d forms and %d questions, want none", len(r.Asked), len(r.Questions))
 	}
-	body, err := Render("mit", "Alice", 2026)
+	body, err := render("mit", "Alice", 2026)
 	if err != nil {
-		t.Fatalf("Render: %v", err)
+		t.Fatalf("render: %v", err)
 	}
 	if out.String() != string(body) {
 		t.Errorf("output is not the rendered licence byte for byte:\n got %q\nwant %q",
@@ -166,9 +166,9 @@ func TestTheHandlerHandsBackTheLicenceByteForByte(t *testing.T) {
 	if err := json.Unmarshal(r.Finished, &got); err != nil {
 		t.Fatalf("unmarshal result: %v", err)
 	}
-	body, err := Render("mit", "Alice", 2026)
+	body, err := render("mit", "Alice", 2026)
 	if err != nil {
-		t.Fatalf("Render: %v", err)
+		t.Fatalf("render: %v", err)
 	}
 	if got.Output != string(body) {
 		t.Errorf("the output is not the rendered licence byte for byte:\n got %q\nwant %q",

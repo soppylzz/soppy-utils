@@ -45,7 +45,7 @@ func configPath(home string) string {
 }
 func statePath(s configstore.Store) string { return filepath.Join(s.Dir(), "state.json") }
 
-func Render(data map[string]any) ([]byte, error) {
+func render(data map[string]any) ([]byte, error) {
 	editor, ok := data["editor"].(string)
 	if !ok || strings.ContainsAny(editor, "\r\n\x00") || strings.TrimSpace(editor) == "" {
 		return nil, errors.New("invalid editor command")
@@ -203,7 +203,7 @@ func install(s configstore.Store, data map[string]any, reply core.Responder) err
 	if err := checkOwned(s); err != nil {
 		return err
 	}
-	rendered, err := Render(data)
+	rendered, err := render(data)
 	if err != nil {
 		return err
 	}

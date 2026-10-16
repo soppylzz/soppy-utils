@@ -8,23 +8,23 @@ import (
 )
 
 func TestControlsMapEachFieldKind(t *testing.T) {
-	controls, err := Controls(form.Spec{Fields: []form.Field{
+	controls, err := controls(form.Spec{Fields: []form.Field{
 		{Key: "name", Type: form.String, Title: "Name"},
 		{Key: "banner_in_tmux", Type: form.Boolean, Title: "Show in tmux"},
 		{Key: "rc", Type: form.Enum, Title: "Shell hooks",
 			Options: []form.Option{{Value: "none", Label: "None"}, {Value: "both", Label: "Bash and Zsh"}}},
 	}})
 	if err != nil {
-		t.Fatalf("Controls: %v", err)
+		t.Fatalf("controls: %v", err)
 	}
 	if len(controls) != 3 {
 		t.Fatalf("got %d controls, want 3", len(controls))
 	}
 
-	want := []Kind{Input, Confirm, Select}
+	want := []kind{inputKind, confirmKind, selectKind}
 	for i, k := range want {
-		if controls[i].Kind != k {
-			t.Errorf("controls[%d].Kind = %q, want %q", i, controls[i].Kind, k)
+		if controls[i].kind != k {
+			t.Errorf("controls[%d].kind = %q, want %q", i, controls[i].kind, k)
 		}
 	}
 	if controls[2].Options[1].Label != "Bash and Zsh" {
@@ -33,11 +33,11 @@ func TestControlsMapEachFieldKind(t *testing.T) {
 }
 
 func TestControlsCarryTheTitleAndHelp(t *testing.T) {
-	controls, err := Controls(form.Spec{Fields: []form.Field{
+	controls, err := controls(form.Spec{Fields: []form.Field{
 		{Key: "name", Type: form.String, Title: "Your name", Help: "Shown in the banner"},
 	}})
 	if err != nil {
-		t.Fatalf("Controls: %v", err)
+		t.Fatalf("controls: %v", err)
 	}
 	if controls[0].Title != "Your name" {
 		t.Errorf("title = %q, want the title core sent", controls[0].Title)
@@ -48,13 +48,13 @@ func TestControlsCarryTheTitleAndHelp(t *testing.T) {
 }
 
 func TestControlsCarryTheCurrentValues(t *testing.T) {
-	controls, err := Controls(form.Spec{Fields: []form.Field{
+	controls, err := controls(form.Spec{Fields: []form.Field{
 		{Key: "name", Type: form.String, Value: "Alice"},
 		{Key: "banner_in_tmux", Type: form.Boolean, Value: true},
 		{Key: "fresh", Type: form.String},
 	}})
 	if err != nil {
-		t.Fatalf("Controls: %v", err)
+		t.Fatalf("controls: %v", err)
 	}
 	if controls[0].Initial != "Alice" {
 		t.Errorf("initial = %v, want Alice", controls[0].Initial)
@@ -73,11 +73,11 @@ func TestAFieldKindThisClientCannotDrawIsRejectedByName(t *testing.T) {
 	//
 	// The example here used to be a map of strings, which this client now draws. The
 	// list grows when a util needs a kind, so the example has to be one nothing draws.
-	_, err := Controls(form.Spec{Fields: []form.Field{
+	_, err := controls(form.Spec{Fields: []form.Field{
 		{Key: "tags", Type: form.Type("array"), Title: "Tags"},
 	}})
 	if err == nil {
-		t.Fatal("Controls accepted a kind it cannot draw, want an error")
+		t.Fatal("controls accepted a kind it cannot draw, want an error")
 	}
 	if !strings.Contains(err.Error(), "tags") {
 		t.Errorf("error %q does not name the field", err)
@@ -87,11 +87,11 @@ func TestAFieldKindThisClientCannotDrawIsRejectedByName(t *testing.T) {
 func TestABooleanWithNoSavedValueStartsOff(t *testing.T) {
 	// A question whose answer was never set has to start somewhere, and "no" is the
 	// safe reading of "nobody said".
-	controls, err := Controls(form.Spec{Fields: []form.Field{
+	controls, err := controls(form.Spec{Fields: []form.Field{
 		{Key: "banner_in_tmux", Type: form.Boolean},
 	}})
 	if err != nil {
-		t.Fatalf("Controls: %v", err)
+		t.Fatalf("controls: %v", err)
 	}
 	if controls[0].Initial != false {
 		t.Errorf("initial = %v, want false", controls[0].Initial)
@@ -99,15 +99,15 @@ func TestABooleanWithNoSavedValueStartsOff(t *testing.T) {
 }
 
 func TestControlsMapAKeyValueField(t *testing.T) {
-	controls, err := Controls(form.Spec{Fields: []form.Field{
+	controls, err := controls(form.Spec{Fields: []form.Field{
 		{Key: "aliases", Type: form.KeyValue, Title: "Aliases",
 			Value: map[string]any{"st": "status"}},
 	}})
 	if err != nil {
-		t.Fatalf("Controls: %v", err)
+		t.Fatalf("controls: %v", err)
 	}
-	if controls[0].Kind != KeyValue {
-		t.Errorf("kind = %q, want %q", controls[0].Kind, KeyValue)
+	if controls[0].kind != keyValueKind {
+		t.Errorf("kind = %q, want %q", controls[0].kind, keyValueKind)
 	}
 }
 

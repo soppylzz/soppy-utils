@@ -11,7 +11,7 @@ import (
 	"github.com/soppylzz/soppy-utils/internal/transport"
 )
 
-// pollInterval is how often Attach retries while a spawned daemon starts.
+// pollInterval is how often attach retries while a spawned daemon starts.
 const pollInterval = 20 * time.Millisecond
 
 // AttachOptions configures how a client reaches core.
@@ -26,7 +26,7 @@ type AttachOptions struct {
 	// LogPath receives the spawned daemon's standard output and error.
 	LogPath string
 
-	// Budget bounds how long Attach waits for a spawned daemon to answer.
+	// Budget bounds how long attach waits for a spawned daemon to answer.
 	Budget time.Duration
 
 	// Env is what this client reports about the machine it is on. Capabilities are
@@ -42,14 +42,14 @@ type AttachOptions struct {
 	Capabilities Capabilities
 }
 
-// Attach connects to a daemon, starting one if none is listening.
+// attach connects to a daemon, starting one if none is listening.
 //
 // The endpoint is derived rather than searched for, so a client can never reach
 // somebody else's core. The daemon is per-user and shared: a client that finds one
 // running uses it, and only a client that finds nothing starts one. Two clients
 // racing to start a daemon is expected and harmless — the loser exits, and this
 // returns the connection to the winner because it only ever retries the dial.
-func Attach(ctx context.Context, opts AttachOptions) (net.Conn, error) {
+func attach(ctx context.Context, opts AttachOptions) (net.Conn, error) {
 	if conn, err := transport.Dial(opts.Endpoint); err == nil {
 		return conn, nil
 	}

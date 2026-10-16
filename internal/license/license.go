@@ -41,7 +41,7 @@ func author() string {
 	return os.Getenv("USERNAME")
 }
 
-func Render(kind, name string, year int) ([]byte, error) {
+func render(kind, name string, year int) ([]byte, error) {
 	if kind != "mit" && kind != "isc" {
 		return nil, errors.New("type must be mit or isc")
 	}
@@ -236,7 +236,7 @@ func Run(ctx context.Context, session core.Session, args []string, out io.Writer
 	if *name == "" {
 		*name = author()
 	}
-	body, err := Render(kind, *name, *year)
+	body, err := render(kind, *name, *year)
 	if err != nil {
 		return err
 	}

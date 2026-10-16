@@ -12,7 +12,7 @@ import (
 
 func TestRenderKnownLegalText(t *testing.T) {
 	for _, kind := range []string{"mit", "isc"} {
-		b, err := Render(kind, "Alice", 2026)
+		b, err := render(kind, "Alice", 2026)
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -46,7 +46,7 @@ cat "$SPU_TEST_CAPTURE"
 	if runtime.GOOS == "darwin" {
 		args = []string{"-q", "/dev/null", "bash", runner}
 	} else {
-		args = []string{"-q", "-c", "bash " + ShellQuote(runner), "/dev/null"}
+		args = []string{"-q", "-c", "bash " + shellQuote(runner), "/dev/null"}
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

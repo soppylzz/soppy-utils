@@ -12,41 +12,41 @@ import (
 	"github.com/soppylzz/soppy-utils/internal/form"
 )
 
-// Kind is the control a field becomes in a terminal.
-type Kind string
+// kind is the control a field becomes in a terminal.
+type kind string
 
 const (
-	Input    Kind = "input"
-	Confirm  Kind = "confirm"
-	Select   Kind = "select"
-	KeyValue Kind = "keyvalue"
+	inputKind    kind = "input"
+	confirmKind  kind = "confirm"
+	selectKind   kind = "select"
+	keyValueKind kind = "keyvalue"
 )
 
-// Control is a field as this client will draw it.
+// control is a field as this client will draw it.
 //
 // The mapping from what core described to what is drawn lives here, apart from the
 // library that draws it, because this is the part with decisions in it: which control,
 // what title, which choices. The library underneath is a detail.
-type Control struct {
+type control struct {
 	Key     string
-	Kind    Kind
+	kind    kind
 	Title   string
 	Help    string
 	Initial any
 	Options []form.Option
 }
 
-// Controls maps a described form to the controls this client will draw.
-func Controls(spec form.Spec) ([]Control, error) {
-	out := make([]Control, 0, len(spec.Fields))
+// controls maps a described form to the controls this client will draw.
+func controls(spec form.Spec) ([]control, error) {
+	out := make([]control, 0, len(spec.Fields))
 	for _, f := range spec.Fields {
-		c := Control{Key: f.Key, Title: f.Title, Help: f.Help, Initial: f.Value}
+		c := control{Key: f.Key, Title: f.Title, Help: f.Help, Initial: f.Value}
 		switch f.Type {
 		case form.String:
-			c.Kind = Input
+			c.kind = inputKind
 
 		case form.Boolean:
-			c.Kind = Confirm
+			c.kind = confirmKind
 			if c.Initial == nil {
 				// A question with an unset answer starts at no. Leaving it nil would
 				// hand the drawing library a value it cannot bind.
@@ -54,11 +54,11 @@ func Controls(spec form.Spec) ([]Control, error) {
 			}
 
 		case form.Enum:
-			c.Kind = Select
+			c.kind = selectKind
 			c.Options = f.Options
 
 		case form.KeyValue:
-			c.Kind = KeyValue
+			c.kind = keyValueKind
 
 		default:
 			// Nothing is dropped silently. A window client and a terminal client draw
