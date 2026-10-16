@@ -145,7 +145,8 @@ binary_suffix=''
   binary="$binary.exe"
   binary_suffix='.exe'
 }
-[[ -f "$tmp/stage/bin/spu" && -f "$tmp/stage/src/spu.sh" && -f "$tmp/stage/src/utils/style.sh" && -f "$tmp/stage/scripts/update.sh" && -x "$binary" ]] || {
+reference="$tmp/stage/libexec/spu-clone-third-party$binary_suffix"
+[[ -f "$tmp/stage/bin/spu" && -f "$tmp/stage/src/spu.sh" && -f "$tmp/stage/src/utils/style.sh" && -f "$tmp/stage/scripts/update.sh" && -x "$binary" && -x "$reference" ]] || {
   echo 'install: incomplete package' >&2
   exit 1
 }

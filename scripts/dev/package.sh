@@ -26,6 +26,10 @@ for target in $targets; do
   suffix=''
   [[ "$os" == windows ]] && suffix='.exe'
   (cd "$repo_root" && GOOS="$os" GOARCH="$arch" CGO_ENABLED=0 go build -ldflags "-X main.version=$version" -o "$stage/libexec/spu$suffix" ./cmd/spu)
+  # The MCP server ships beside spu rather than inside it: it needs no daemon, speaks
+  # somebody else's protocol, and a fault in it should not take a person's shell tools
+  # down with it.
+  (cd "$repo_root" && GOOS="$os" GOARCH="$arch" CGO_ENABLED=0 go build -o "$stage/libexec/spu-clone-third-party$suffix" ./cmd/spu-clone-third-party)
   tar -czf "$out_dir/$package.tar.gz" -C "$stage" .
 
   if command -v sha256sum >/dev/null 2>&1; then
