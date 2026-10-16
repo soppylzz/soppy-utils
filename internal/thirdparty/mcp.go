@@ -113,8 +113,11 @@ func toolDefinition() map[string]any {
 					"description": "A package name like github.com/owner/repo, or a URL.",
 				},
 				"version": map[string]any{
-					"type":        "string",
-					"description": "The version wanted. The major is what decides whether a cached checkout will do.",
+					"type": "string",
+					"description": "The version wanted, as a major (\"8\"), a full version " +
+						"(\"8.1.0\" or \"v8.1.0\"), or omitted for the newest release. A major " +
+						"means the newest release of that major. The major decides whether a " +
+						"checkout already in the cache will do.",
 				},
 				"pin": map[string]any{
 					"type":        "boolean",

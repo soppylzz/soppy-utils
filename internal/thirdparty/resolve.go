@@ -64,15 +64,25 @@ type Result struct {
 	Decision *Decision
 }
 
-// Fetch runs the configurable fetch flow.
+// Tags lists the version tags a remote publishes.
 //
-// It is a seam rather than a call to git so that a mirror, a token, or a vendored copy
-// can be used without changing this package. The default is the script `spu` installs.
-type Fetch func(ctx context.Context, url, dest, ref string) error
+// It is asked only when the cache cannot answer, so a hit still touches no network. The
+// seam exists because the work it does — deciding which tag a request means — is the part
+// that was wrong, and it has to be testable without a network.
+type Tags func(ctx context.Context, url string) ([]string, error)
+
+// Fetch checks a package out and reports the version it checked out.
+//
+// Returning the version rather than having the caller assume it is the whole point: what
+// gets recorded has to be what is on disk, and only the thing that did the checkout knows
+// that. It is a seam rather than a call to git so that a mirror, a token, or a vendored
+// copy can be used without changing this package.
+type Fetch func(ctx context.Context, url, dest, ref string) (version string, err error)
 
 // Resolver answers requests from a cache directory.
 type Resolver struct {
 	CacheDir string
+	Tags     Tags
 	Fetch    Fetch
 
 	// Log records what was fetched, so a developer can see what their agents have been
@@ -90,6 +100,7 @@ func (r Resolver) Resolve(ctx context.Context, req Request) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
+	url := CloneURL(req.Package)
 
 	cached, err := readProvenance(dir)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
@@ -107,31 +118,76 @@ func (r Resolver) Resolve(ctx context.Context, req Request) (Result, error) {
 		}}, nil
 	}
 
-	satisfied := cached.Version != "" && majorOf(cached.Version) == majorOf(req.Version)
-	if satisfied {
+	if satisfies(cached, req.Version) {
 		return Result{Path: dir, Version: cached.Version}, nil
 	}
 
-	ref := req.Version
-	if err := r.fetch(ctx, req.Package, dir, ref); err != nil {
+	// What a caller gives is a version, not a ref: `8` is a major, and asking git for a
+	// branch called 8 is what produced "Remote branch 8 not found". It is resolved here,
+	// before anything is cloned, so what is checked out and what is recorded are the same.
+	ref, err := r.resolveRef(ctx, url, req.Version)
+	if err != nil {
+		return Result{}, err
+	}
+
+	version, err := r.fetch(ctx, url, dir, ref)
+	if err != nil {
 		return Result{}, fmt.Errorf("fetch %s at %s: %w", req.Package, ref, err)
 	}
-	after, err := readProvenance(dir)
-	if err != nil {
-		return Result{}, fmt.Errorf("read provenance of %s: %w", dir, err)
+	if version == "" {
+		return Result{}, fmt.Errorf("fetch %s reported no version, so there would be "+
+			"nothing to record and the cache could never answer again", req.Package)
 	}
-	return Result{Path: dir, Version: after.Version, Fetched: true}, nil
+
+	// Recorded after the checkout and from what the checkout reported, so a fetch that
+	// failed leaves nothing behind and a fetch that succeeded records the truth.
+	if err := writeProvenance(dir, provenance{URL: url, Ref: ref, Version: version}); err != nil {
+		return Result{}, fmt.Errorf("record what was checked out of %s: %w", req.Package, err)
+	}
+	return Result{Path: dir, Version: version, Fetched: true}, nil
 }
 
-func (r Resolver) fetch(ctx context.Context, pkg, dir, ref string) error {
+// satisfies reports whether a checkout on disk answers the request.
+//
+// A request with no version constrains nothing, so anything there will do — which is what
+// the comment on majorOf always said and what the old guard, by also requiring the cache
+// to have a version, made impossible: an unversioned fetch recorded an empty version, so
+// it could never satisfy itself and every later call cloned over its own directory.
+func satisfies(cached provenance, want string) bool {
+	if cached.Version == "" {
+		return false
+	}
+	if majorOf(want) == "" {
+		return true
+	}
+	return majorOf(cached.Version) == majorOf(want)
+}
+
+// resolveRef turns a requested version into a tag the remote actually publishes.
+func (r Resolver) resolveRef(ctx context.Context, url, want string) (string, error) {
+	if r.Tags == nil {
+		return "", errors.New("no way to list the versions a remote publishes is configured")
+	}
+	tags, err := r.Tags(ctx, url)
+	if err != nil {
+		return "", fmt.Errorf("list the versions of %s: %w", url, err)
+	}
+	ref, err := PickVersion(want, tags)
+	if err != nil {
+		return "", fmt.Errorf("%s: %w", url, err)
+	}
+	return ref, nil
+}
+
+func (r Resolver) fetch(ctx context.Context, url, dir, ref string) (string, error) {
 	fetch := r.Fetch
 	if fetch == nil {
-		return errors.New("no fetch flow is configured")
+		return "", errors.New("no fetch flow is configured")
 	}
 	if r.Log != nil {
-		fmt.Fprintf(r.Log, "fetch %s at %s -> %s\n", pkg, ref, dir)
+		fmt.Fprintf(r.Log, "fetch %s at %s -> %s\n", url, ref, dir)
 	}
-	return fetch(ctx, pkg, dir, ref)
+	return fetch(ctx, url, dir, ref)
 }
 
 // pathFor maps a package to a directory under the cache.
@@ -219,11 +275,4 @@ func readProvenance(dir string) (provenance, error) {
 		return provenance{}, err
 	}
 	return p, nil
-}
-
-// RecordProvenance records what a checkout is, for the fetch flow to call once it has
-// succeeded. It is exported because the binary owns the fetching and this package owns
-// what is known about the result.
-func RecordProvenance(dir, url, ref string) error {
-	return writeProvenance(dir, provenance{URL: url, Ref: ref, Version: ref})
 }

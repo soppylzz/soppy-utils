@@ -9,7 +9,8 @@ import (
 
 func serve(t *testing.T, cache string, lines ...string) []map[string]any {
 	t.Helper()
-	r := Resolver{CacheDir: cache, Fetch: (&fakeFetch{}).run, Log: &strings.Builder{}}
+	f := remote(t)
+	r := Resolver{CacheDir: cache, Tags: f.tagsFor, Fetch: f.clone, Log: &strings.Builder{}}
 	var out strings.Builder
 	in := strings.NewReader(strings.Join(lines, "\n") + "\n")
 	if err := Serve(context.Background(), in, &out, r); err != nil {
