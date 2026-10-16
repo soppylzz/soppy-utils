@@ -144,8 +144,11 @@ func Run(ctx context.Context, session core.Session, args []string, out io.Writer
 			if *interactive {
 				return errors.New("interactive terminal required")
 			}
-			fmt.Fprintln(out, "Usage: spu license --mit|--isc [--name NAME] [--year YEAR] [--output FILE]")
-			return nil
+			// A restated usage line was a second list of the options, and it disagreed
+			// with the one help renders. Succeeding after printing it also meant
+			// `spu license > LICENSE` wrote a usage line into a licence file.
+			return errors.New("no terminal to choose a licence with: give --mit or --isc, " +
+				"or run spu license --help for the options")
 		}
 		if !v.Writable {
 			return errors.New("cannot write with invalid or future config")
