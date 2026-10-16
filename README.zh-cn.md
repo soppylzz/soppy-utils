@@ -75,7 +75,7 @@ spu 不会往 `AGENTS.md` 或 `CLAUDE.md` 里写任何东西 —— 那是项目
 
 不要修改生成的文件。把你要补充的内容另写一份放在旁边，并在 `AGENTS.md` 中说明；你自己拥有的文档永远不会被动。要改变生成文档的内容，就改变它依据的答案。
 
-选中某个 harness 时，`spu-clone-third-party` 也会注册到该 harness 读取的文件里：Claude Code 是项目根的 `.mcp.json`，Pi 是 `.pi/mcp.json`，Codex 是 `.codex/config.toml` 里的 `[mcp_servers.clone-third-party]`。Codex 的项目文件是它的通用配置而非专门存服务的文件，因此只在项目没有该文件时写入，否则只打印需要添加的几行。取消选中某个 harness 时，只移除 spu 自己的条目。`.agents/mcp/spu.json` 记录注册了什么、注册到了哪些 harness。
+选中某个 harness 时，`spu-clone-third-party` 也会注册到该 harness 读取的文件里：Claude Code 是项目根的 `.mcp.json`，Pi 是 `.pi/mcp.json`，Codex 是 `.codex/config.toml` 里的 `[mcp_servers.clone-third-party]`。Codex 的文件是项目的通用配置而非专门存服务的文件，因此是往里面**追加**表，而不是重写该文件 —— 项目自己的注释和顺序都会保留。取消选中某个 harness 时，只移除 spu 自己的条目。`.agents/mcp/spu.json` 记录注册了什么、注册到了哪些 harness。
 
 spu 不为任何 harness 写权限规则，所以没有任何东西阻止 agent 往那个缓存里写。Claude Code 可以自行配置：在 `.claude/settings.json` 里加 `{"permissions":{"deny":["Edit(~/code/reference/**)"]}}`。另外两家无法配置：Codex 的沙箱是白名单模型，其 glob 规则只能禁止**读**；Pi 没有内置沙箱，也不对任何操作请求批准。如果写权限对你重要，请隔离这两个 harness。`.agents/SPU.md` 里对读到它的人也是这么说的。
 
