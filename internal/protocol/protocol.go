@@ -9,10 +9,32 @@ package protocol
 
 import "encoding/json"
 
-// CodeProtocolMismatch is returned when the client and core share no protocol
-// version. The client responds by asking core to stop and reconnecting, which starts
-// the newly installed build.
-const CodeProtocolMismatch = -32001
+// Version is the protocol version this build speaks. A client and a core that do
+// not overlap refuse each other rather than guessing, because a guessed field shape
+// is worse than a restart.
+const Version = 1
+
+// Error codes. The -326xx range is JSON-RPC's own, and describes a caller that broke
+// the protocol; the -320xx range is reserved for server errors, which is where the
+// codes this project defines live.
+const (
+	// CodeProtocolMismatch is returned when the client and core share no protocol
+	// version. The client responds by asking core to stop and reconnecting, which
+	// starts the newly installed build.
+	CodeProtocolMismatch = -32001
+
+	// CodeMethodNotFound is returned for a method this core does not implement.
+	CodeMethodNotFound = -32601
+
+	// CodeInvalidParams is returned when the parameters are well-formed JSON but the
+	// wrong shape. It is deliberately distinct from a version mismatch: one is a bug
+	// in the caller, the other is two builds that disagree, and they send the client
+	// in opposite directions.
+	CodeInvalidParams = -32602
+
+	// CodeInternalError is returned when core itself failed.
+	CodeInternalError = -32603
+)
 
 // Request is a message that expects a response.
 type Request struct {
