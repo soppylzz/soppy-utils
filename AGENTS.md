@@ -6,7 +6,7 @@ Read the current code and tests before changing behavior. Files in `.soppy/plans
 
 ## Overview
 
-`soppy-utils` exposes one `spu <util> [...args]` command. The public launcher, installer, updater, and VS Code integration use Bash 3.2. The `license`, `welcome`, and `git` utils use a precompiled Go helper; end users do not need Go. Release packages target Apple Silicon Macs, Ubuntu 24.04 LTS on amd64, and Windows 10/11 Git Bash on amd64.
+`soppy-utils` exposes one `spu <util> [...args]` command. The public launcher, installer, updater, and VS Code integration use Bash 3.2. The utils run in a Go core that the command starts on demand and talks to over a socket; end users do not need Go. Release packages target Apple Silicon Macs, Ubuntu 24.04 LTS on amd64, and Windows 10/11 Git Bash on amd64.
 
 ## Language and format
 
@@ -16,7 +16,7 @@ Write code comments, commit messages, requirement documents, and the English REA
 
 - `bin/spu`: thin Bash launcher.
 - `src/spu.sh`, `src/vscode.sh`, `src/utils/style.sh`: Bash runtime.
-- `cmd/spu-helper`: Go entry point for Go-owned utils and read-only config checks.
+- `cmd/spu`: the one executable. It is a client, and the core daemon it starts when it cannot reach one.
 - `internal/clioutput`: shared Go CLI diagnostics on stderr.
 - `internal/configstore`: per-util `VERSION`, JSON config, schema validation, and in-memory defaults.
 - `internal/{license,welcome,gitconfig}`: util-specific CLI, forms, templates, rendering, and ownership rules.

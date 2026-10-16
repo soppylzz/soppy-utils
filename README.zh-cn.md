@@ -8,7 +8,7 @@
 
 </div>
 
-`spu` 用一条命令收纳常用的开发工具。启动器基于 Bash 3.2；许可证、欢迎横幅和 Git 全局配置由 Go 程序处理。发布包面向 Apple 芯片 Mac、x64 的 Ubuntu 24.04 LTS，以及使用 Git Bash 的 x64 Windows 10/11。发布版二进制无需安装 Go。
+`spu` 用一条命令收纳常用的开发工具。启动器基于 Bash 3.2；工具逻辑运行在一个 Go core 中，命令按需启动它并与之通信。发布包面向 Apple 芯片 Mac、x64 的 Ubuntu 24.04 LTS，以及使用 Git Bash 的 x64 Windows 10/11。发布版二进制无需安装 Go。
 
 ## 命令
 

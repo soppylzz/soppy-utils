@@ -25,7 +25,7 @@ for target in $targets; do
 
   suffix=''
   [[ "$os" == windows ]] && suffix='.exe'
-  (cd "$repo_root" && GOOS="$os" GOARCH="$arch" CGO_ENABLED=0 go build -ldflags "-X main.version=$version" -o "$stage/libexec/spu-helper$suffix" ./cmd/spu-helper)
+  (cd "$repo_root" && GOOS="$os" GOARCH="$arch" CGO_ENABLED=0 go build -ldflags "-X main.version=$version" -o "$stage/libexec/spu$suffix" ./cmd/spu)
   tar -czf "$out_dir/$package.tar.gz" -C "$stage" .
 
   if command -v sha256sum >/dev/null 2>&1; then

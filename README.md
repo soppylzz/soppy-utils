@@ -8,7 +8,7 @@
 
 </div>
 
-`spu` brings a few everyday development tools under one command. Its launcher runs on Bash 3.2; a Go helper handles licenses, welcome banners, and global Git settings. Release packages target Apple Silicon Macs, Ubuntu 24.04 LTS on x64, and Windows 10/11 on x64 with Git Bash. Release binaries do not require Go.
+`spu` brings a few everyday development tools under one command. Its launcher runs on Bash 3.2; the tools run in a Go core that the command starts on demand and talks to. Release packages target Apple Silicon Macs, Ubuntu 24.04 LTS on x64, and Windows 10/11 on x64 with Git Bash. Release binaries do not require Go.
 
 ## Commands
 

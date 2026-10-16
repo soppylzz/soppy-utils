@@ -139,14 +139,18 @@ fi
 mkdir "$tmp/stage"
 tar -xzf "$tmp/$filename" -C "$tmp/stage"
 
-helper="$tmp/stage/libexec/spu-helper"
-[[ "$platform" == windows ]] && helper="$helper.exe"
-[[ -f "$tmp/stage/bin/spu" && -f "$tmp/stage/src/spu.sh" && -f "$tmp/stage/src/utils/style.sh" && -f "$tmp/stage/scripts/update.sh" && -x "$helper" ]] || {
+binary="$tmp/stage/libexec/spu"
+binary_suffix=''
+[[ "$platform" == windows ]] && {
+  binary="$binary.exe"
+  binary_suffix='.exe'
+}
+[[ -f "$tmp/stage/bin/spu" && -f "$tmp/stage/src/spu.sh" && -f "$tmp/stage/src/utils/style.sh" && -f "$tmp/stage/scripts/update.sh" && -x "$binary" ]] || {
   echo 'install: incomplete package' >&2
   exit 1
 }
-[[ "$("$helper" --version)" == "$version" ]] || {
-  echo 'install: helper version mismatch' >&2
+[[ "$("$binary" --version)" == "$version" ]] || {
+  echo 'install: binary version mismatch' >&2
   exit 1
 }
 [[ "$(bash "$tmp/stage/bin/spu" --version)" == "$version" ]] || {
@@ -182,5 +186,5 @@ if ! bash "$launcher" --version >/dev/null; then
   exit 1
 fi
 
-"$target/libexec/spu-helper${helper##*spu-helper}" config-status
+"$target/libexec/spu$binary_suffix" config-status
 printf 'soppy-utils %s installed at %s\n' "$version" "$target"

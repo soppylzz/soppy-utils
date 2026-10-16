@@ -22,16 +22,16 @@ fi
   exit 1
 }
 
-helper="$target/libexec/spu-helper"
-[[ "${OSTYPE:-}" == msys* || "${OSTYPE:-}" == cygwin* ]] && helper="$helper.exe"
+binary="$target/libexec/spu"
+[[ "${OSTYPE:-}" == msys* || "${OSTYPE:-}" == cygwin* ]] && binary="$binary.exe"
 if [[ "$purge" == true ]]; then
-  [[ -x "$helper" ]] || {
-    echo 'uninstall: helper missing; cannot purge safely' >&2
+  [[ -x "$binary" ]] || {
+    echo 'uninstall: the Go binary is missing; cannot purge safely' >&2
     exit 1
   }
-  "$helper" welcome uninstall --purge
-  "$helper" git uninstall --purge
-  "$helper" license purge
+  "$binary" welcome uninstall --purge
+  "$binary" git uninstall --purge
+  "$binary" license purge
 fi
 
 if [[ -L "$launcher" ]]; then
