@@ -40,8 +40,12 @@ if [[ -L "$launcher" ]]; then
     exit 1
   }
   rm -f -- "$launcher"
+  rm -f -- "$(dirname "$launcher")/spu-clone-third-party" \
+    "$(dirname "$launcher")/spu-clone-third-party.exe"
 elif [[ -f "$launcher" ]] && grep -q '^# Managed by soppy-utils launcher$' "$launcher"; then
   rm -f -- "$launcher"
+  rm -f -- "$(dirname "$launcher")/spu-clone-third-party" \
+    "$(dirname "$launcher")/spu-clone-third-party.exe"
 else
   echo 'uninstall: launcher is unmanaged or missing; leaving it' >&2
 fi
