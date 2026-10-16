@@ -57,19 +57,25 @@ func copyMap(m map[string]any) map[string]any {
 }
 
 func (s Store) Validate(data map[string]any) error {
-	return validateEnvelope(s.Schema, envelope{Util: s.Util, SchemaVersion: s.Current, Data: data})
+	return validateEnvelope(s.Util, s.Schema, envelope{Util: s.Util, SchemaVersion: s.Current, Data: data})
 }
 
-func validateEnvelope(schemaBytes []byte, env envelope) error {
+func validateEnvelope(util string, schemaBytes []byte, env envelope) error {
 	var raw any
 	if err := json.Unmarshal(schemaBytes, &raw); err != nil {
 		return err
 	}
+	// The schema is registered under a name of its own rather than a relative one. A
+	// relative name is resolved against the working directory of whichever process is
+	// validating, so a failure reported a path like file:///tmp/<somewhere>/schema.json:
+	// a file that does not exist, in a directory the reader has never heard of, at the
+	// top of an otherwise useful message.
+	id := "urn:spu:" + util + ":schema"
 	compiler := jsonschema.NewCompiler()
-	if err := compiler.AddResource("schema.json", raw); err != nil {
+	if err := compiler.AddResource(id, raw); err != nil {
 		return err
 	}
-	schema, err := compiler.Compile("schema.json")
+	schema, err := compiler.Compile(id)
 	if err != nil {
 		return err
 	}
@@ -115,7 +121,7 @@ func (s Store) Read() View {
 			v.Warning = fmt.Sprintf("unsupported old config contract %d; use a compatible migration tool", n)
 			return v
 		}
-		if err := validateEnvelope(oldSchema, env); err != nil {
+		if err := validateEnvelope(s.Util, oldSchema, env); err != nil {
 			v.Writable = false
 			v.Warning = "invalid old config: " + err.Error()
 			return v
