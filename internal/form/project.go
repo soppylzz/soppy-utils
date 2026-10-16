@@ -143,6 +143,12 @@ type fieldSchema struct {
 	Enum      []string `json:"enum"`
 	MinLength int      `json:"minLength"`
 	MaxLength int      `json:"maxLength"`
+
+	// Properties and AdditionalProperties tell an object apart from a map. An object
+	// with declared properties is a struct, and no client can invent a control for an
+	// arbitrary one; an object whose values are all strings is a map it can.
+	Properties           json.RawMessage `json:"properties"`
+	AdditionalProperties json.RawMessage `json:"additionalProperties"`
 }
 
 func (f fieldSchema) kind() (Type, error) {
@@ -153,6 +159,19 @@ func (f fieldSchema) kind() (Type, error) {
 		return String, nil
 	case f.Type == "boolean":
 		return Boolean, nil
+
+	case f.Type == "object":
+		if len(f.Properties) > 0 {
+			return "", fmt.Errorf("is an object with a fixed shape, which a client cannot render")
+		}
+		var values struct {
+			Type string `json:"type"`
+		}
+		if err := json.Unmarshal(f.AdditionalProperties, &values); err != nil || values.Type != "string" {
+			return "", fmt.Errorf("is an object whose values are not all strings, which a client cannot render")
+		}
+		return KeyValue, nil
+
 	case f.Type == "":
 		return "", fmt.Errorf("has no type and no enum, so a client cannot render it")
 	default:

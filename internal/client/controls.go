@@ -16,9 +16,10 @@ import (
 type Kind string
 
 const (
-	Input   Kind = "input"
-	Confirm Kind = "confirm"
-	Select  Kind = "select"
+	Input    Kind = "input"
+	Confirm  Kind = "confirm"
+	Select   Kind = "select"
+	KeyValue Kind = "keyvalue"
 )
 
 // Control is a field as this client will draw it.
@@ -55,6 +56,9 @@ func Controls(spec form.Spec) ([]Control, error) {
 		case form.Enum:
 			c.Kind = Select
 			c.Options = f.Options
+
+		case form.KeyValue:
+			c.Kind = KeyValue
 
 		default:
 			// Nothing is dropped silently. A window client and a terminal client draw

@@ -197,3 +197,60 @@ func TestAFieldWithNoValueIsStillDescribed(t *testing.T) {
 		t.Errorf("value = %v, want nil", got.Value)
 	}
 }
+
+func TestProjectAKeyValueField(t *testing.T) {
+	// A map of strings is a shape a terminal can render as an object and markup can
+	// render as a table, which is why it is a kind rather than being flattened into text
+	// on the way in.
+	spec, err := FromSchema(envelope(`{
+	  "type": "object",
+	  "properties": {"aliases": {
+	    "type": "object",
+	    "additionalProperties": {"type": "string"}
+	  }}
+	}`), map[string]any{"aliases": map[string]any{"st": "status"}})
+	if err != nil {
+		t.Fatalf("FromSchema: %v", err)
+	}
+
+	got := fieldByKey(t, spec, "aliases")
+	if got.Type != KeyValue {
+		t.Fatalf("type = %q, want %q", got.Type, KeyValue)
+	}
+	entries, ok := got.Value.(map[string]any)
+	if !ok || entries["st"] != "status" {
+		t.Errorf("value = %v, want the stored map", got.Value)
+	}
+}
+
+func TestAnObjectWithAFixedShapeIsNotAKeyValueField(t *testing.T) {
+	// A field the client cannot render has to fail here, where the util author sees it.
+	// An object with declared properties is a struct rather than a map, and no client
+	// can invent a control for an arbitrary one.
+	_, err := FromSchema(envelope(`{
+	  "type": "object",
+	  "properties": {"nested": {
+	    "type": "object",
+	    "properties": {"a": {"type": "string"}}
+	  }}
+	}`), nil)
+	if err == nil {
+		t.Fatal("FromSchema accepted an object with a fixed shape, want an error")
+	}
+	if !strings.Contains(err.Error(), "nested") {
+		t.Errorf("error %q does not name the field", err)
+	}
+}
+
+func TestAKeyValueMapOfNonStringsIsRejected(t *testing.T) {
+	_, err := FromSchema(envelope(`{
+	  "type": "object",
+	  "properties": {"counts": {
+	    "type": "object",
+	    "additionalProperties": {"type": "integer"}
+	  }}
+	}`), nil)
+	if err == nil {
+		t.Fatal("FromSchema accepted a map of something other than strings, want an error")
+	}
+}

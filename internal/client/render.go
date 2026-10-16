@@ -2,6 +2,9 @@ package client
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 
 	"charm.land/huh/v2"
@@ -44,6 +47,28 @@ func drawForm(ctx context.Context, in io.Reader, out io.Writer, spec form.Spec) 
 			}
 			fields = append(fields, field)
 			read = append(read, func() (string, any) { return c.Key, v })
+
+		case KeyValue:
+			text := keyValueText(c.Initial)
+			field := huh.NewText().Title(c.Title).Value(&text).Validate(func(s string) error {
+				if _, err := parseKeyValue(s); err != nil {
+					return errors.New(`write this as a JSON object, for example {"st": "status"}`)
+				}
+				return nil
+			})
+			if c.Help != "" {
+				field = field.Description(c.Help)
+			}
+			fields = append(fields, field)
+			read = append(read, func() (string, any) {
+				values, err := parseKeyValue(text)
+				if err != nil {
+					// Validation held while the form was open, so this is unreachable
+					// through a terminal. Leaving the field out beats inventing a value.
+					return c.Key, nil
+				}
+				return c.Key, values
+			})
 
 		case Select:
 			v := stringValue(c.Initial)
@@ -93,4 +118,41 @@ func stringValue(v any) string {
 func boolValue(v any) bool {
 	b, _ := v.(bool)
 	return b
+}
+
+// keyValueText renders a map as the text a person edits.
+//
+// Sorted and indented, because somebody is going to look at it: Go marshals map keys in
+// order, so the text does not shuffle between openings.
+func keyValueText(v any) string {
+	values, ok := v.(map[string]any)
+	if !ok || len(values) == 0 {
+		return "{}"
+	}
+	body, err := json.MarshalIndent(values, "", "  ")
+	if err != nil {
+		return "{}"
+	}
+	return string(body)
+}
+
+// parseKeyValue reads back what keyValueText produced, and rejects anything else.
+//
+// The schema says a map of strings, so a number or a nested object is somebody editing
+// JSON the command would refuse later. Saying so while the form is open is where they
+// can still do something about it.
+func parseKeyValue(text string) (map[string]any, error) {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(text), &raw); err != nil {
+		return nil, err
+	}
+	out := make(map[string]any, len(raw))
+	for key, value := range raw {
+		var s string
+		if err := json.Unmarshal(value, &s); err != nil {
+			return nil, fmt.Errorf("%s is not a string", key)
+		}
+		out[key] = s
+	}
+	return out, nil
 }

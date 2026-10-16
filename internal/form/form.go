@@ -23,6 +23,11 @@ const (
 
 	// Enum is a choice from a fixed list.
 	Enum Type = "enum"
+
+	// KeyValue is a small map of strings. A terminal renders it as an object a person
+	// edits and markup renders it as a table, which is why it is a kind of its own
+	// rather than being flattened into text on the way in.
+	KeyValue Type = "keyvalue"
 )
 
 // Spec is a form.

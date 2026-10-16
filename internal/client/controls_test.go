@@ -70,13 +70,16 @@ func TestControlsCarryTheCurrentValues(t *testing.T) {
 func TestAFieldKindThisClientCannotDrawIsRejectedByName(t *testing.T) {
 	// A window client and a terminal client draw different controls, but neither may
 	// silently drop a field: the user would submit a form that was missing a question.
+	//
+	// The example here used to be a map of strings, which this client now draws. The
+	// list grows when a util needs a kind, so the example has to be one nothing draws.
 	_, err := Controls(form.Spec{Fields: []form.Field{
-		{Key: "aliases", Type: form.Type("keyvalue"), Title: "Aliases"},
+		{Key: "tags", Type: form.Type("array"), Title: "Tags"},
 	}})
 	if err == nil {
 		t.Fatal("Controls accepted a kind it cannot draw, want an error")
 	}
-	if !strings.Contains(err.Error(), "aliases") {
+	if !strings.Contains(err.Error(), "tags") {
 		t.Errorf("error %q does not name the field", err)
 	}
 }
@@ -92,5 +95,50 @@ func TestABooleanWithNoSavedValueStartsOff(t *testing.T) {
 	}
 	if controls[0].Initial != false {
 		t.Errorf("initial = %v, want false", controls[0].Initial)
+	}
+}
+
+func TestControlsMapAKeyValueField(t *testing.T) {
+	controls, err := Controls(form.Spec{Fields: []form.Field{
+		{Key: "aliases", Type: form.KeyValue, Title: "Aliases",
+			Value: map[string]any{"st": "status"}},
+	}})
+	if err != nil {
+		t.Fatalf("Controls: %v", err)
+	}
+	if controls[0].Kind != KeyValue {
+		t.Errorf("kind = %q, want %q", controls[0].Kind, KeyValue)
+	}
+}
+
+func TestKeyValueTextRoundTrips(t *testing.T) {
+	// The terminal renders a map as the text a person edits, and reads it back. Both
+	// halves are here because a form that renders something it cannot read is a form
+	// that loses the user's work.
+	original := map[string]any{"st": "status", "lg": "log --oneline"}
+	back, err := parseKeyValue(keyValueText(original))
+	if err != nil {
+		t.Fatalf("parseKeyValue: %v", err)
+	}
+	if len(back) != 2 || back["lg"] != "log --oneline" {
+		t.Errorf("round trip gave %v, want %v", back, original)
+	}
+}
+
+func TestKeyValueTextIsReadable(t *testing.T) {
+	// Sorted, so the text does not shuffle between openings, and indented, because a
+	// person is going to edit it.
+	text := keyValueText(map[string]any{"zeta": "z", "alpha": "a"})
+	want := "{\n  \"alpha\": \"a\",\n  \"zeta\": \"z\"\n}"
+	if text != want {
+		t.Errorf("text =\n%s\nwant\n%s", text, want)
+	}
+}
+
+func TestParseKeyValueRejectsWhatIsNotAnObject(t *testing.T) {
+	for _, text := range []string{"", "not json", "[1,2]", `{"a":1}`} {
+		if _, err := parseKeyValue(text); err == nil {
+			t.Errorf("parseKeyValue(%q) succeeded, want an error", text)
+		}
 	}
 }
