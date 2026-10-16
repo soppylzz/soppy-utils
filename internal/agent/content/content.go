@@ -20,9 +20,6 @@ var itemFiles embed.FS
 //go:embed docs
 var docs embed.FS
 
-//go:embed harnesses
-var harnesses embed.FS
-
 // Items parses the shipped items, in a stable order.
 //
 // Order matters: the picker shows them in this order, and a list that reshuffles between
@@ -58,21 +55,6 @@ func Items() ([]item.Item, error) {
 // exist until the choices are made. The prose is here and the list is filled in.
 func SPUProse() ([]byte, error) {
 	return docs.ReadFile("docs/spu.md")
-}
-
-// HarnessBase is the configuration a harness needs in a project.
-//
-// The reference cache is readable and not writable: an agent may read the checkouts and
-// may not change them, and that deny rule is the whole of the safety. Written for Claude
-// Code only, because its format is the one that has been checked — Codex and Pi express
-// the same intent in formats this does not know, and guessing would write a file that
-// looks right and does nothing.
-func HarnessBase() fs.FS {
-	sub, err := fs.Sub(harnesses, "harnesses")
-	if err != nil {
-		panic(err)
-	}
-	return sub
 }
 
 // Files is the text the items name in their content segments.

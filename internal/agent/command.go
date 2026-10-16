@@ -127,7 +127,7 @@ func generate(ctx context.Context, project string, reply core.Responder) error {
 	if err := next.Write(canonical(project)); err != nil {
 		return err
 	}
-	done, err := harness.Apply(project, harnesses, content.HarnessBase())
+	done, err := harness.Apply(project, harnesses)
 	for _, line := range done {
 		_ = reply.Notify(line)
 	}
@@ -406,7 +406,7 @@ func edit(ctx context.Context, project string, reply core.Responder) error {
 	if err := next.Write(canonical(project)); err != nil {
 		return err
 	}
-	done, err := harness.Apply(project, harnesses, content.HarnessBase())
+	done, err := harness.Apply(project, harnesses)
 	for _, line := range done {
 		_ = reply.Notify(line)
 	}

@@ -201,8 +201,10 @@ func TestChoosingAHarnessArrangesForIt(t *testing.T) {
 	if target != filepath.Join("..", ".agents", "skills") {
 		t.Errorf("link target = %q", target)
 	}
-	if _, err := os.Stat(filepath.Join(project, ".claude", "settings.json")); err != nil {
-		t.Errorf("the base configuration was not written: %v", err)
+	// spu writes no permission rules for any harness, so a project that already owns its
+	// settings file is never touched and a project that has none never gains one.
+	if _, err := os.Stat(filepath.Join(project, ".claude", "settings.json")); err == nil {
+		t.Error("a settings file was written although spu writes no permission rules")
 	}
 	// A harness that was not chosen is not arranged for.
 	if _, err := os.Stat(filepath.Join(project, ".pi")); err == nil {

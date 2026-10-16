@@ -5,14 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"testing/fstest"
 )
-
-func base() fstest.MapFS {
-	return fstest.MapFS{
-		"claude/settings.json": {Data: []byte(`{"permissions":{"deny":["Edit(~/code/reference/**)"]}}`)},
-	}
-}
 
 func TestApplyLinksSkillsForClaudeCodeOnly(t *testing.T) {
 	project := t.TempDir()
@@ -23,7 +16,7 @@ func TestApplyLinksSkillsForClaudeCodeOnly(t *testing.T) {
 		t.Fatalf("setup: %v", err)
 	}
 
-	done, err := Apply(project, []string{"claude", "pi", "codex"}, base())
+	done, err := Apply(project, []string{"claude", "pi", "codex"})
 	if err != nil {
 		t.Fatalf("Apply: %v", err)
 	}
@@ -45,57 +38,15 @@ func TestApplyLinksSkillsForClaudeCodeOnly(t *testing.T) {
 	}
 }
 
-func TestApplyWritesABaseConfigurationOnlyWhenAbsent(t *testing.T) {
-	// A project with its own settings must never have them replaced. The whole file, and
-	// only when there is nothing there.
-	project := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(project, ".claude"), 0o755); err != nil {
-		t.Fatalf("setup: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(project, ".claude", "settings.json"),
-		[]byte(`{"mine":true}`), 0o644); err != nil {
-		t.Fatalf("setup: %v", err)
-	}
-
-	if _, err := Apply(project, []string{"claude"}, base()); err != nil {
-		t.Fatalf("Apply: %v", err)
-	}
-	body, err := os.ReadFile(filepath.Join(project, ".claude", "settings.json"))
-	if err != nil {
-		t.Fatalf("ReadFile: %v", err)
-	}
-	if string(body) != `{"mine":true}` {
-		t.Errorf("a project's own settings were replaced: %s", body)
-	}
-}
-
-func TestApplyWritesTheBaseConfigurationWhenThereIsNone(t *testing.T) {
-	project := t.TempDir()
-	done, err := Apply(project, []string{"claude"}, base())
-	if err != nil {
-		t.Fatalf("Apply: %v", err)
-	}
-	body, err := os.ReadFile(filepath.Join(project, ".claude", "settings.json"))
-	if err != nil {
-		t.Fatalf("the base configuration was not written: %v", err)
-	}
-	if !strings.Contains(string(body), "reference") {
-		t.Errorf("the deny rule is missing: %s", body)
-	}
-	if !contains(done, "wrote .claude/settings.json") {
-		t.Errorf("the write was not reported: %v", done)
-	}
-}
-
 func TestApplyIsIdempotent(t *testing.T) {
 	project := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(project, ".agents", "skills", "x"), 0o755); err != nil {
 		t.Fatalf("setup: %v", err)
 	}
-	if _, err := Apply(project, []string{"claude"}, base()); err != nil {
+	if _, err := Apply(project, []string{"claude"}); err != nil {
 		t.Fatalf("first Apply: %v", err)
 	}
-	second, err := Apply(project, []string{"claude"}, base())
+	second, err := Apply(project, []string{"claude"})
 	if err != nil {
 		t.Fatalf("second Apply: %v", err)
 	}
@@ -122,7 +73,7 @@ func TestApplyRefusesToReplaceALinkPointingElsewhere(t *testing.T) {
 		t.Fatalf("setup: %v", err)
 	}
 
-	_, err := Apply(project, []string{"claude"}, base())
+	_, err := Apply(project, []string{"claude"})
 	if err == nil {
 		t.Fatal("a link pointing somewhere else was silently replaced")
 	}
@@ -149,7 +100,7 @@ func TestNoLinkIsMadeWhenThereAreNoSkills(t *testing.T) {
 		t.Fatalf("setup: %v", err)
 	}
 
-	done, err := Apply(project, []string{"claude"}, base())
+	done, err := Apply(project, []string{"claude"})
 	if err != nil {
 		t.Fatalf("Apply: %v", err)
 	}

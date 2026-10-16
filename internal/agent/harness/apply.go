@@ -3,7 +3,6 @@ package harness
 import (
 	"errors"
 	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -15,12 +14,16 @@ import (
 // Apply creates what the chosen harnesses need inside a project, and returns a line for
 // each thing it did.
 //
-// Two things, both of which must not happen when they are not wanted: a link, for the one
-// harness that cannot read the canonical directory, and a base configuration, for a
-// project that does not have its own. Creating `.codex/` in a project that does not use
-// Codex is a rude way to answer a question nobody asked, so neither happens for a harness
-// that was not chosen.
-func Apply(project string, harnesses []string, base fs.FS) ([]string, error) {
+// That is one thing: a link, for the one harness that cannot read the canonical directory
+// on its own. It is done only for a harness that was chosen, because creating `.codex/`
+// in a project that does not use Codex is a rude way to answer a question nobody asked.
+//
+// spu writes no permission rules for any harness. It used to write Claude Code a deny rule
+// for the reference cache and skip a project that already had a settings file — which is
+// most of them, silently, so the rule was absent exactly where somebody might have been
+// relying on it. Rather than merge into a file the project owns, spu now writes nothing
+// and says in SPU.md what to add and why two of the three harnesses cannot.
+func Apply(project string, harnesses []string) ([]string, error) {
 	var done []string
 
 	// A link into a directory that is not there is a dead link, which looks like spu
@@ -38,13 +41,6 @@ func Apply(project string, harnesses []string, base fs.FS) ([]string, error) {
 		}
 	}
 
-	for _, h := range harnesses {
-		wrote, err := writeBaseConfig(project, h, base)
-		if err != nil {
-			return done, err
-		}
-		done = append(done, wrote...)
-	}
 	return done, nil
 }
 
@@ -102,49 +98,6 @@ func symlinkHint(link Link, err error) error {
 			"by hand or leave it, and Claude Code will not see the skills", link.Path, err)
 	}
 	return fmt.Errorf("could not create the link %s: %w", link.Path, err)
-}
-
-// writeBaseConfig copies a harness's base configuration in, and only when there is
-// nothing at the path.
-//
-// The whole file rather than a merge: a project's own settings are the project's, and
-// writing into a file somebody also edits is how a tool loses their work. The cost is
-// named in the design — a value that changes later is not carried into a file already
-// written.
-func writeBaseConfig(project, h string, base fs.FS) ([]string, error) {
-	if base == nil {
-		return nil, nil
-	}
-	var written []string
-	err := fs.WalkDir(base, h, func(p string, d fs.DirEntry, err error) error {
-		if err != nil || d.IsDir() {
-			return err
-		}
-		relPath, err := filepath.Rel(h, p)
-		if err != nil {
-			return err
-		}
-		target := filepath.Join(Dir(project, item.Root(h)), relPath)
-		if _, statErr := os.Stat(target); statErr == nil {
-			return nil
-		}
-		body, err := fs.ReadFile(base, p)
-		if err != nil {
-			return err
-		}
-		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
-			return err
-		}
-		if err := os.WriteFile(target, body, 0o644); err != nil {
-			return err
-		}
-		written = append(written, "wrote "+rel(project, target))
-		return nil
-	})
-	if err != nil && !errors.Is(err, fs.ErrNotExist) {
-		return written, err
-	}
-	return written, nil
 }
 
 func rel(project, path string) string {
