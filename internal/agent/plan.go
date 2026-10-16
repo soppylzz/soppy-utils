@@ -42,6 +42,11 @@ type Step struct {
 	// the project was renamed.
 	Rel string
 
+	// Answers are what this item was generated from. They travel with the step so the
+	// ledger can record them, which is what lets a later run offer what was chosen last
+	// time instead of a blank form.
+	Answers map[string]any
+
 	Decision decide.Decision
 
 	// Content is the text that would be written. It is computed even for a step that
@@ -81,6 +86,7 @@ func Plan(opts PlanOptions) ([]Step, error) {
 				Item:     it,
 				Path:     path,
 				Rel:      out.Path,
+				Answers:  answers,
 				Decision: decide.Plan(facts, it.Policy, it.OnModified),
 				Content:  body,
 			})

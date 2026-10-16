@@ -128,6 +128,7 @@ func record(out *ledger.Ledger, step Step) {
 			continue
 		}
 		out.Items[i].ItemVersion = step.Item.Version
+		out.Items[i].Answers = step.Answers
 		// Replaced rather than appended: an item writes one file at one path, and an item
 		// carried forward already has that path recorded.
 		replaced := false
@@ -146,6 +147,7 @@ func record(out *ledger.Ledger, step Step) {
 	out.Items = append(out.Items, ledger.Item{
 		ID:          step.Item.ID,
 		ItemVersion: step.Item.Version,
+		Answers:     step.Answers,
 		Outputs:     []ledger.Output{entry},
 	})
 }

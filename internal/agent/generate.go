@@ -228,7 +228,16 @@ func ask(ctx context.Context, reply core.Responder, items []item.Source, chosen 
 			continue
 		}
 
+		// Three sources, weakest first: what the item declares, what this project answered
+		// last time, and what this run was told. A recorded answer outranks a declared
+		// default because somebody chose it — without that, re-running with --items to add
+		// one document silently resets every other answer to the default.
 		declared := it.Defaults()
+		if recorded, ok := led.Find(id); ok {
+			for key, value := range recorded.Answers {
+				declared[key] = value
+			}
+		}
 		for key, value := range sel.answers[id] {
 			declared[key] = value
 		}
@@ -238,15 +247,7 @@ func ask(ctx context.Context, reply core.Responder, items []item.Source, chosen 
 				return nil, fmt.Errorf("item %s asks questions and this run has nobody to "+
 					"ask; give the answers with --answers", id)
 			}
-			saved := declared
-			if !sel.hasAnswers(id) {
-				if recorded, ok := led.Find(id); ok {
-					for key, value := range recorded.Answers {
-						saved[key] = value
-					}
-				}
-			}
-			spec, err := form.FromObjectSchema(it.Questions, saved)
+			spec, err := form.FromObjectSchema(it.Questions, declared)
 			if err != nil {
 				return nil, fmt.Errorf("item %s: %w", id, err)
 			}
@@ -266,10 +267,20 @@ func ask(ctx context.Context, reply core.Responder, items []item.Source, chosen 
 			return nil, fmt.Errorf("item %s asks %q and nothing answered it; give it in "+
 				"--answers, or run spu agent --interactive", id, key)
 		}
-		for key := range declared {
-			if !sel.hasAnswers(id) {
-				_ = reply.Notify(fmt.Sprintf("%s: %s = %v (the item's default)", id, key, declared[key]))
+		chosen := map[string]bool{}
+		if recorded, ok := led.Find(id); ok {
+			for key := range recorded.Answers {
+				chosen[key] = true
 			}
+		}
+		for key := range sel.answers[id] {
+			chosen[key] = true
+		}
+		for _, key := range questionKeys(it) {
+			if chosen[key] {
+				continue
+			}
+			_ = reply.Notify(fmt.Sprintf("%s: %s = %v (the item's default)", id, key, declared[key]))
 		}
 		out[id] = declared
 	}

@@ -200,12 +200,17 @@ func (l Ledger) Write(dir string) error {
 		for k, v := range it.extra {
 			raw[k] = v
 		}
-		for key, value := range map[string]any{
+		fields := map[string]any{
 			"id":           it.ID,
 			"item_version": it.ItemVersion,
-			"answers":      it.Answers,
 			"outputs":      it.Outputs,
-		} {
+		}
+		// Left out rather than written as null: an item that was not asked anything has no
+		// answers, which is different from having answered nothing.
+		if len(it.Answers) > 0 {
+			fields["answers"] = it.Answers
+		}
+		for key, value := range fields {
 			if err := put(raw, key, value); err != nil {
 				return err
 			}

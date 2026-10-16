@@ -800,3 +800,52 @@ func TestTheLibraryFollowsTheSessionNotThisProcess(t *testing.T) {
 		t.Errorf("configDir with no AppData = %q, want %q", got, want)
 	}
 }
+
+func TestAnAnswerAlreadyChosenSurvivesALaterRun(t *testing.T) {
+	// Adding a document by naming it with --items must not reset what the project already
+	// answered. A recorded answer outranks a declared default because somebody chose it,
+	// and losing it silently rewrites a document with a value nobody asked for.
+	project := t.TempDir()
+	answers := filepath.Join(t.TempDir(), "first.json")
+	if err := os.WriteFile(answers, []byte(
+		`{"items":["reference-checkout"],"answers":{"reference-checkout":{"reference-dir":"~/mine"}}}`), 0o644); err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+	if err := run(t, project, &coretest.Recorder{}, "--answers", answers); err != nil {
+		t.Fatalf("first run: %v", err)
+	}
+
+	// A later run adds an item and says nothing about the directory.
+	if err := run(t, project, &coretest.Recorder{},
+		"--items", "reference-checkout,conduct-of-go"); err != nil {
+		t.Fatalf("second run: %v", err)
+	}
+
+	body, err := os.ReadFile(filepath.Join(canonical(project), "skills", "reference-checkout", "SKILL.md"))
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if !strings.Contains(string(body), "~/mine") {
+		t.Errorf("the answer this project gave was replaced by a default:\n%s", firstLines(body))
+	}
+	if strings.Contains(string(body), "~/code/reference") {
+		t.Error("the declared default was written over an answer somebody chose")
+	}
+
+	// And this run was told so, rather than appearing to have decided.
+	report := &coretest.Recorder{}
+	if err := run(t, project, report, "--items", "reference-checkout"); err != nil {
+		t.Fatalf("third run: %v", err)
+	}
+	if said := strings.Join(report.Notices, "\n"); strings.Contains(said, "reference-dir") {
+		t.Errorf("a question already answered was reported as assumed:\n%s", said)
+	}
+}
+
+func firstLines(body []byte) string {
+	lines := strings.Split(string(body), "\n")
+	if len(lines) > 18 {
+		lines = lines[:18]
+	}
+	return strings.Join(lines, "\n")
+}
