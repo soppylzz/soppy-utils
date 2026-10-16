@@ -106,6 +106,14 @@ func generate(ctx context.Context, project string, reply core.Responder) error {
 	}
 	steps = append(steps, idx)
 
+	if len(harnesses) > 0 {
+		mcp, err := mcpStep(project, harnesses, mcpServers())
+		if err != nil {
+			return err
+		}
+		steps = append(steps, mcp)
+	}
+
 	next, err := Apply(ctx, project, steps, led, reply)
 	if err != nil {
 		return err
@@ -125,6 +133,27 @@ func generate(ctx context.Context, project string, reply core.Responder) error {
 	}
 	if err != nil {
 		return err
+	}
+
+	// A project that dropped a harness has its registration taken back out, and only
+	// spu's own entry is ever touched.
+	if gone := missing(led.Harnesses, harnesses); len(gone) > 0 {
+		removed, err := harness.UnregisterMCP(project, gone, mcpServers())
+		for _, line := range removed {
+			_ = reply.Notify(line)
+		}
+		if err != nil {
+			return err
+		}
+	}
+	if len(harnesses) > 0 {
+		registered, err := harness.RegisterMCP(project, harnesses, mcpServers())
+		for _, line := range registered {
+			_ = reply.Notify(line)
+		}
+		if err != nil {
+			return err
+		}
 	}
 	return reply.Finish(nil)
 }
@@ -298,7 +327,7 @@ func status(project string, reply core.Responder) error {
 		// The index is generated from the selection rather than from an item, so it is
 		// not in the list to be looked up in. Reporting it as an unknown item was a
 		// warning about a file spu wrote itself.
-		if recorded.ID == indexID {
+		if recorded.ID == indexID || recorded.ID == mcpRecordID {
 			continue
 		}
 		it, still := known[recorded.ID]

@@ -330,3 +330,73 @@ func TestStatusDoesNotReportTheIndexAsUnknown(t *testing.T) {
 		t.Errorf("status reported something about a healthy project:\n%s", said)
 	}
 }
+
+func TestChoosingAHarnessRegistersTheMCPServer(t *testing.T) {
+	// The three registrations are three different files in two formats. Claude Code reads
+	// a file at the project root, Pi reads one under .pi/, and Codex reads TOML.
+	project := t.TempDir()
+	reply := &coretest.Recorder{Askable: true, Answers: map[string]any{
+		"items":     []any{"conduct-of-go"},
+		"harnesses": []any{"claude", "pi", "codex"},
+	}}
+	if err := (Handler{}).Run(context.Background(), core.Command{
+		Util: "agent", Session: core.Session{GOOS: "linux", WorkingDir: project},
+	}, reply); err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+
+	for _, path := range []string{
+		filepath.Join(project, ".mcp.json"),
+		filepath.Join(project, ".pi", "mcp.json"),
+	} {
+		body, err := os.ReadFile(path)
+		if err != nil {
+			t.Errorf("no registration at %s: %v", path, err)
+			continue
+		}
+		if !strings.Contains(string(body), "spu-clone-third-party") {
+			t.Errorf("%s does not name the binary:\n%s", path, body)
+		}
+	}
+
+	codex, err := os.ReadFile(filepath.Join(project, ".codex", "config.toml"))
+	if err != nil {
+		t.Fatalf("no Codex registration: %v", err)
+	}
+	if !strings.Contains(string(codex), "[mcp_servers.clone-third-party]") {
+		t.Errorf("the Codex registration is not a TOML table:\n%s", codex)
+	}
+
+	record, err := os.ReadFile(filepath.Join(canonical(project), "mcp", "spu.json"))
+	if err != nil {
+		t.Fatalf("the canonical definition was not written: %v", err)
+	}
+	if !strings.Contains(string(record), "clone-third-party") {
+		t.Errorf("the record does not name the server:\n%s", record)
+	}
+	for _, want := range []string{"claude", "pi", "codex"} {
+		if !strings.Contains(string(record), want) {
+			t.Errorf("the record does not say it was registered with %s:\n%s", want, record)
+		}
+	}
+}
+
+func TestNoHarnessMeansNoRegistration(t *testing.T) {
+	// A project that chose no harness gets no .mcp.json at its root. Writing one would be
+	// answering a question nobody asked.
+	project := t.TempDir()
+	reply := &coretest.Recorder{Askable: true, Answers: map[string]any{
+		"items": []any{"conduct-of-go"}, "harnesses": []any{},
+	}}
+	if err := (Handler{}).Run(context.Background(), core.Command{
+		Util: "agent", Session: core.Session{GOOS: "linux", WorkingDir: project},
+	}, reply); err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(project, ".mcp.json")); err == nil {
+		t.Error("a registration was written although no harness was chosen")
+	}
+	if _, err := os.Stat(filepath.Join(canonical(project), "mcp")); err == nil {
+		t.Error("the MCP record was written although no harness was chosen")
+	}
+}
