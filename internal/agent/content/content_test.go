@@ -1,6 +1,8 @@
 package content
 
 import (
+	"encoding/json"
+	"io/fs"
 	"strings"
 	"testing"
 
@@ -52,6 +54,36 @@ func TestTheItemsAreInAStableOrder(t *testing.T) {
 	for i := range first {
 		if first[i].ID != second[i].ID {
 			t.Fatalf("order changed between reads at %d: %q then %q", i, first[i].ID, second[i].ID)
+		}
+	}
+}
+
+func TestTheDenyRuleIsOneClaudeCodeActuallyMatches(t *testing.T) {
+	// Claude Code matches file permission rules against Edit(path) only, and an Edit rule
+	// covers every editing tool. A rule spelled for another tool is not rejected — it is
+	// simply never matched, so it reads like protection and gives none. Claude Code says
+	// so at startup, which is how this was found.
+	body, err := fs.ReadFile(HarnessBase(), "claude/settings.json")
+	if err != nil {
+		t.Fatalf("the base configuration is missing: %v", err)
+	}
+	var got struct {
+		Permissions struct {
+			Deny []string `json:"deny"`
+		} `json:"permissions"`
+	}
+	if err := json.Unmarshal(body, &got); err != nil {
+		t.Fatalf("the base configuration is not JSON: %v", err)
+	}
+	if len(got.Permissions.Deny) == 0 {
+		t.Fatal("the base configuration denies nothing, so the cache is writable")
+	}
+	for _, rule := range got.Permissions.Deny {
+		if !strings.HasPrefix(rule, "Edit(") {
+			t.Errorf("deny rule %q is not an Edit rule, so Claude Code never matches it", rule)
+		}
+		if !strings.Contains(rule, "reference") {
+			t.Errorf("deny rule %q does not name the cache directory", rule)
 		}
 	}
 }

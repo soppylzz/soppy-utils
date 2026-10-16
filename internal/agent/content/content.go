@@ -52,6 +52,14 @@ func Items() ([]item.Item, error) {
 	return out, nil
 }
 
+// SPUProse is the text of the index file the agent reads.
+//
+// It is not an item: its content is the list of what was chosen, and that list does not
+// exist until the choices are made. The prose is here and the list is filled in.
+func SPUProse() ([]byte, error) {
+	return docs.ReadFile("docs/spu.md")
+}
+
 // HarnessBase is the configuration a harness needs in a project.
 //
 // The reference cache is readable and not writable: an agent may read the checkouts and
