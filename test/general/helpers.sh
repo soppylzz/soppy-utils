@@ -6,6 +6,12 @@
 # too.
 export SPU_CORE_IDLE_TIMEOUT="${SPU_CORE_IDLE_TIMEOUT:-2s}"
 
+# Every spec runs in a home of its own, set here for the same reason: a spec that forgot
+# to set one reached the real one. That is how license.spec.sh came to start a core in the
+# configuration directory of whoever ran the suite, and leave it running there.
+_spu_spec_home="$(mktemp -d)"
+export HOME="$_spu_spec_home"
+
 _tests_run=0
 _tests_failed=0
 
@@ -23,6 +29,9 @@ toBe() {
 }
 
 finish() {
+  # Removed here rather than in a trap, because a spec that sets one of its own would
+  # replace it and leave this behind.
+  [[ -n "${_spu_spec_home:-}" ]] && rm -r -- "$_spu_spec_home"
   printf 'Tests: %s, Passed: %s, Failed: %s\n' "$_tests_run" "$((_tests_run - _tests_failed))" "$_tests_failed"
   ((_tests_failed == 0))
 }
