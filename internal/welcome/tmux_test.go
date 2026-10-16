@@ -99,7 +99,7 @@ func TestTheFlagSetsItForScriptedInstalls(t *testing.T) {
 	args := []string{"install", "--name", "Alice", "--device", "Mac",
 		"--message", "Ready", "--rc", "none", "--banner-in-tmux"}
 
-	if err := Run(context.Background(), home, args, io.Discard, r); err != nil {
+	if err := Run(context.Background(), sessionFor(home), args, io.Discard, r); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 

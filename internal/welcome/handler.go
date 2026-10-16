@@ -18,7 +18,7 @@ type Handler struct{}
 
 func (Handler) Run(ctx context.Context, cmd core.Command, reply core.Responder) error {
 	var out bytes.Buffer
-	if err := Run(ctx, cmd.Home, cmd.Args, &out, reply); err != nil {
+	if err := Run(ctx, cmd.Session, cmd.Args, &out, reply); err != nil {
 		return err
 	}
 

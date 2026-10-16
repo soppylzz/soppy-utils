@@ -14,15 +14,32 @@ import (
 	"github.com/soppylzz/soppy-utils/internal/form"
 )
 
+// Session is what the session that asked is like.
+//
+// These are facts the daemon knows and a command needs, and they are facts about the
+// session rather than about this process: the daemon outlives the client that started
+// it, and a later client may be a different user session entirely. They travel together
+// so that a command takes one thing rather than growing a field at a time.
+//
+// This is the seed of the SessionContext the design calls for. Client capabilities and
+// a workspace join it when something needs them.
+type Session struct {
+	// Home is the session's home. Every util works on this one.
+	Home string
+
+	// GOOS is the platform the session reported. It is not read from this process,
+	// because on Git Bash the two can differ.
+	GOOS string
+
+	// Shell is the shell the user is in, when the client could tell.
+	Shell string
+}
+
 // Command is one client request for core to do something.
 type Command struct {
-	Util string
-	Args []string
-
-	// Home is the home of the session that asked, which is not necessarily this
-	// process's: the daemon outlives the client that started it, and a later client may
-	// be a different user session entirely. Every util works on this one.
-	Home string
+	Util    string
+	Args    []string
+	Session Session
 }
 
 // Responder is how a running command talks to the client that asked for it.

@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -66,7 +67,7 @@ func TestStatusWritesToTheWriterItWasGiven(t *testing.T) {
 	// Nothing is written anywhere else: core has no stream of its own to write to, and
 	// the client that does is the one that decided where it goes.
 	var out strings.Builder
-	if err := Run(context.Background(), t.TempDir(), []string{"status"}, &out, &recorder{}); err != nil {
+	if err := Run(context.Background(), sessionFor(t.TempDir()), []string{"status"}, &out, &recorder{}); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 	if !strings.Contains(out.String(), "config contract:") {
@@ -80,7 +81,7 @@ func TestInstallAsksThroughTheResponderWhenAUserIsAvailable(t *testing.T) {
 		"name": "Alice", "device": "Mac", "message": "Ready", "rc": "bash",
 	}}
 
-	if err := Run(context.Background(), home, []string{"install"}, io.Discard, r); err != nil {
+	if err := Run(context.Background(), sessionFor(home), []string{"install"}, io.Discard, r); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 	if r.asked == nil {
@@ -107,7 +108,7 @@ func TestANonInteractiveClientIsNotAsked(t *testing.T) {
 	home := t.TempDir()
 	r := &recorder{canAsk: false}
 
-	if err := Run(context.Background(), home, []string{"install"}, io.Discard, r); err != nil {
+	if err := Run(context.Background(), sessionFor(home), []string{"install"}, io.Discard, r); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 	if r.asked != nil {
@@ -138,7 +139,7 @@ func TestAFutureContractIsReportedNotRepaired(t *testing.T) {
 	}
 
 	r := &recorder{}
-	if err := Run(context.Background(), home, []string{"status"}, io.Discard, r); err != nil {
+	if err := Run(context.Background(), sessionFor(home), []string{"status"}, io.Discard, r); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 	// A warning is a diagnostic, so it goes through the responder rather than into the
@@ -150,7 +151,8 @@ func TestAFutureContractIsReportedNotRepaired(t *testing.T) {
 
 func TestTheHandlerHandsBackOutputRatherThanWritingIt(t *testing.T) {
 	r := &recorder{}
-	cmd := core.Command{Util: "welcome", Args: []string{"status"}, Home: t.TempDir()}
+	cmd := core.Command{Util: "welcome", Args: []string{"status"},
+		Session: core.Session{Home: t.TempDir()}}
 
 	if err := (Handler{}).Run(context.Background(), cmd, r); err != nil {
 		t.Fatalf("Handler.Run: %v", err)
@@ -185,7 +187,8 @@ func TestTheHandlerRunsAgainstTheSessionsHome(t *testing.T) {
 	}
 
 	r := &recorder{}
-	cmd := core.Command{Util: "welcome", Args: []string{"status"}, Home: home}
+	cmd := core.Command{Util: "welcome", Args: []string{"status"},
+		Session: core.Session{Home: home}}
 
 	if err := (Handler{}).Run(context.Background(), cmd, r); err != nil {
 		t.Fatalf("Handler.Run: %v", err)
@@ -200,4 +203,10 @@ func TestTheHandlerRunsAgainstTheSessionsHome(t *testing.T) {
 	if !strings.Contains(got.Output, "config contract: 1") {
 		t.Errorf("output = %q, want the config from the session's home", got.Output)
 	}
+}
+
+// sessionFor is a session on the machine running the test. A test that cares which
+// platform a command is judged as builds its own.
+func sessionFor(home string) core.Session {
+	return core.Session{Home: home, GOOS: runtime.GOOS}
 }

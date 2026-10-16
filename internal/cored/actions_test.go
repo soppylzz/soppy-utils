@@ -189,3 +189,40 @@ func TestActionsAreNotOfferedToAClientThatCannotRunThem(t *testing.T) {
 	}
 	_ = id
 }
+
+func TestAnEmptyOfferIsToldRatherThanAsked(t *testing.T) {
+	// Core can name what is missing without having anything to offer. The FIGlet fonts
+	// are files with no agreed source, so there is no command to propose — and asking a
+	// user to approve an empty list is not a question.
+	seen := make(chan action.Outcome, 1)
+	c := startDaemon(t, Options{Handler: scriptedHandler{
+		run: func(ctx context.Context, cmd core.Command, reply core.Responder) error {
+			outcome, err := reply.AskActions(ctx, action.Request{
+				Reason: "welcome needs its FIGlet fonts",
+			})
+			if err != nil {
+				return err
+			}
+			seen <- outcome
+			return reply.Finish(nil)
+		},
+	}})
+
+	c.withActionExecution()
+	id := c.startSession("welcome")
+
+	select {
+	case got := <-seen:
+		if !got.Declined {
+			t.Errorf("outcome = %+v, want it declined rather than reported as done", got)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("AskActions never returned for an offer with nothing in it")
+	}
+
+	note := c.await("session/notify")
+	if !strings.Contains(string(note.Params), "font") {
+		t.Errorf("notify = %s, want what is missing named", note.Params)
+	}
+	_ = id
+}

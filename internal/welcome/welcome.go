@@ -283,7 +283,6 @@ func install(s configstore.Store, data map[string]any, reply core.Responder) err
 		if strings.Contains(string(zshrc), "$SOPPY/shell/welcome.sh") {
 			reply.Notify("welcome: legacy welcome hook remains in ~/.zshrc")
 		}
-		detectOptionalTools(s.Home).warnMissing(reply)
 		reply.Notify("welcome: generated " + scriptPath(s))
 		return nil
 	})
@@ -322,7 +321,8 @@ func uninstall(s configstore.Store, purge bool, reply core.Responder) error {
 // itself and never prints to this process's output. That is the whole of the
 // arrangement: the same code serves a terminal client and a window, because neither is
 // visible from here, and the same code runs under a test with no terminal at all.
-func Run(ctx context.Context, home string, args []string, out io.Writer, reply core.Responder) error {
+func Run(ctx context.Context, session core.Session, args []string, out io.Writer, reply core.Responder) error {
+	home := session.Home
 	s := Store(home)
 	v := s.Read()
 	if v.Warning != "" {
@@ -447,22 +447,53 @@ func Run(ctx context.Context, home string, args []string, out io.Writer, reply c
 			}
 		}
 	}
-	if args[0] == "migrate" {
-		if LegacyChecksum(home) {
+	installed := false
+	switch {
+	case args[0] == "migrate" && LegacyChecksum(home):
+		if err := install(s, data, reply); err != nil {
+			return err
+		}
+		base := filepath.Join(home, ".config", "soppy-utils")
+		os.Remove(filepath.Join(base, "welcome.sh"))
+		os.Remove(filepath.Join(base, "welcome.cksum"))
+		installed = true
+
+	case args[0] == "migrate":
+		if _, err := os.Stat(scriptPath(s)); err == nil {
 			if err := install(s, data, reply); err != nil {
 				return err
 			}
-			base := filepath.Join(home, ".config", "soppy-utils")
-			os.Remove(filepath.Join(base, "welcome.sh"))
-			os.Remove(filepath.Join(base, "welcome.cksum"))
-			return nil
+			installed = true
+		} else if err := managedfile.WithLock(s.Dir(), func() error { return s.Save(data) }); err != nil {
+			return err
 		}
-		if _, err := os.Stat(scriptPath(s)); err == nil {
-			return install(s, data, reply)
+
+	default:
+		if err := install(s, data, reply); err != nil {
+			return err
 		}
-		return managedfile.WithLock(s.Dir(), func() error { return s.Save(data) })
+		installed = true
 	}
-	return install(s, data, reply)
+
+	if !installed {
+		return nil
+	}
+	return offerDependencies(ctx, session, s, reply)
+}
+
+// offerDependencies tells the client what the banner could use and cannot find.
+//
+// A client that cannot run anything is told the same thing rather than nothing: the
+// warning still has to reach a human reading the output, and the session continues. A
+// dependency that cannot be installed leaves a util degraded, which is a legitimate
+// state rather than a failure.
+func offerDependencies(ctx context.Context, session core.Session, s configstore.Store, reply core.Responder) error {
+	req := dependencyActions(session.GOOS, detectOptionalTools(s.Home))
+	if req.Reason == "" {
+		return nil
+	}
+	_, err := reply.AskActions(ctx, req)
+	return err
 }
 
 // LegacyChecksum reports whether a previous generated banner still has its recorded cksum.

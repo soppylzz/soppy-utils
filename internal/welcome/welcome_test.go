@@ -144,7 +144,7 @@ func TestLegacyBannerMigration(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(home, ".bashrc"), []byte(legacyHook), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if err := Run(context.Background(), home,
+	if err := Run(context.Background(), sessionFor(home),
 		[]string{"migrate", "--name", "Alice", "--device", "Mac", "--message", "Ready", "--rc", "bash"},
 		io.Discard, &recorder{}); err != nil {
 		t.Fatal(err)

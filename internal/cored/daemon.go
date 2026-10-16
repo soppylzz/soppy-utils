@@ -496,7 +496,11 @@ func (d *Daemon) startSession(
 		err := d.opts.Handler.Run(sctx, core.Command{
 			Util: p.Util,
 			Args: p.Args,
-			Home: state.env.HomeForFilesystem(),
+			Session: core.Session{
+				Home:  state.env.HomeForFilesystem(),
+				GOOS:  state.env.GOOS,
+				Shell: state.env.Shell,
+			},
 		}, s)
 		if err == nil && s.hasEnded() {
 			return

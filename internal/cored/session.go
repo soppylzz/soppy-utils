@@ -80,7 +80,10 @@ func (s *session) Ask(ctx context.Context, spec form.Spec) (map[string]any, erro
 // and the session continues: a dependency that cannot be installed leaves a util
 // degraded, which is a legitimate state rather than a failure.
 func (s *session) AskActions(ctx context.Context, req action.Request) (action.Outcome, error) {
-	if !s.capabilities.ActionExecution {
+	// Nothing to offer, or nobody to offer it to. Both end the same way: the user is
+	// told what is missing, and the session continues. Asking somebody to approve an
+	// empty list is not a question.
+	if len(req.Actions) == 0 || !s.capabilities.ActionExecution {
 		if err := s.Notify(missingNote(req)); err != nil {
 			return action.Outcome{}, err
 		}
