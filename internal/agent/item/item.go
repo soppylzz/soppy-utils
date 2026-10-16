@@ -213,6 +213,37 @@ func validateOutput(id string, out Output, questions map[string]map[string]bool)
 	return nil
 }
 
+// Defaults is the answers an item declares, for a run with nobody to ask.
+//
+// A JSON Schema default is an annotation and nothing fills it in, so these are read out
+// explicitly. A question that declares no default is left out rather than invented, which
+// is what lets a caller tell a decision from a guess.
+func (it Item) Defaults() map[string]any {
+	out := map[string]any{}
+	if len(it.Questions) == 0 {
+		return out
+	}
+	var schema struct {
+		Properties map[string]struct {
+			Default json.RawMessage `json:"default"`
+		} `json:"properties"`
+	}
+	if err := json.Unmarshal(it.Questions, &schema); err != nil {
+		return out
+	}
+	for key, q := range schema.Properties {
+		if len(q.Default) == 0 {
+			continue
+		}
+		var value any
+		if err := json.Unmarshal(q.Default, &value); err != nil {
+			continue
+		}
+		out[key] = value
+	}
+	return out
+}
+
 // readQuestions gathers what the schema asks, so a condition can be checked against it.
 //
 // Only a boolean or a fixed list of choices can be asked about: a condition has to be

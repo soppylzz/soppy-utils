@@ -446,3 +446,178 @@ func TestTheCacheSectionOnlyAppearsWhenTheServerIsRegistered(t *testing.T) {
 		t.Errorf("dropping the section left a hole:\n%s", body)
 	}
 }
+
+func run(t *testing.T, dir string, reply core.Responder, args ...string) error {
+	t.Helper()
+	return (Handler{}).Run(context.Background(), core.Command{
+		Util: "agent", Args: args,
+		Session: core.Session{GOOS: "linux", WorkingDir: dir},
+	}, reply)
+}
+
+func TestFlagsCanChooseWithoutATerminal(t *testing.T) {
+	// The same command a person runs must be runnable from a script. Naming the items is
+	// answering the picker's question, so it is not asked again.
+	project := t.TempDir()
+	reply := &coretest.Recorder{} // no terminal at all
+
+	if err := run(t, project, reply, "--items", "conduct-of-go,soppy-excalidraw",
+		"--harnesses", "claude"); err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(canonical(project), "prompts", "conduct-of-go.md")); err != nil {
+		t.Errorf("the named item was not generated: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(canonical(project), "prompts", "conduct-of-docs.md")); err == nil {
+		t.Error("an item that was not named was generated anyway")
+	}
+	if _, err := os.Stat(filepath.Join(project, ".mcp.json")); err != nil {
+		t.Errorf("the named harness was not arranged for: %v", err)
+	}
+	if len(reply.Asked) != 0 {
+		t.Errorf("a form was shown although the flags said everything: %v", reply.Asked)
+	}
+}
+
+func TestAnItemThatAsksSomethingIsAnsweredFromItsDeclaredDefault(t *testing.T) {
+	// conduct-of-commit asks whether to include a commitlint section and declares false.
+	// A scripted run has to decide, and what it decided is reported rather than silent.
+	project := t.TempDir()
+	reply := &coretest.Recorder{}
+
+	if err := run(t, project, reply, "--items", "conduct-of-commit"); err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+	body, err := os.ReadFile(filepath.Join(canonical(project), "prompts", "conduct-of-commit.md"))
+	if err != nil {
+		t.Fatalf("the document was not written: %v", err)
+	}
+	if strings.Contains(string(body), "commitlint") {
+		t.Error("the segment gated on a false default was written")
+	}
+	said := strings.Join(reply.Notices, "\n")
+	if !strings.Contains(said, "lint-commits") {
+		t.Errorf("nothing said which answer was assumed:\n%s", said)
+	}
+}
+
+func TestAnAnswersFileCanSayEverything(t *testing.T) {
+	project := t.TempDir()
+	answers := filepath.Join(t.TempDir(), "answers.json")
+	if err := os.WriteFile(answers, []byte(`{
+	  "items": ["conduct-of-commit"],
+	  "harnesses": ["pi"],
+	  "answers": {"conduct-of-commit": {"lint-commits": true}}
+	}`), 0o644); err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+	reply := &coretest.Recorder{}
+
+	if err := run(t, project, reply, "--answers", answers); err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+	body, err := os.ReadFile(filepath.Join(canonical(project), "prompts", "conduct-of-commit.md"))
+	if err != nil {
+		t.Fatalf("the document was not written: %v", err)
+	}
+	if !strings.Contains(string(body), "commitlint") {
+		t.Error("the answer from the file was not used")
+	}
+	if _, err := os.Stat(filepath.Join(project, ".pi", "mcp.json")); err != nil {
+		t.Errorf("the harness from the file was not arranged for: %v", err)
+	}
+	if len(reply.Asked) != 0 {
+		t.Error("a form was shown although the file answered everything")
+	}
+}
+
+func TestAQuestionWithNoAnswerAndNoDefaultIsRefused(t *testing.T) {
+	// Silently writing a document whose answer nobody chose is how a project gets text
+	// that does not describe it.
+	project := t.TempDir()
+	reply := &coretest.Recorder{}
+	// conduct-of-commit's default is declared, so this has to come from an item that
+	// declares none. Every shipped item declares one, so the check is driven through the
+	// selection path instead: --interactive with nobody to ask.
+	err := run(t, project, reply, "--items", "conduct-of-go", "--interactive")
+	if err == nil {
+		t.Fatal("--interactive with nobody to ask succeeded")
+	}
+	if !strings.Contains(err.Error(), "terminal") {
+		t.Errorf("error %q does not say what is missing", err)
+	}
+}
+
+func TestAnUnknownNameIsRefusedBeforeAnythingIsWritten(t *testing.T) {
+	// A typo in --items would otherwise generate nothing and say nothing, which reads as
+	// success.
+	project := t.TempDir()
+	reply := &coretest.Recorder{}
+
+	err := run(t, project, reply, "--items", "conduct-of-gp")
+	if err == nil {
+		t.Fatal("a misspelled item was accepted")
+	}
+	if !strings.Contains(err.Error(), "conduct-of-gp") {
+		t.Errorf("error %q does not name what was asked for", err)
+	}
+	if _, statErr := os.Stat(canonical(project)); statErr == nil {
+		t.Error("something was written before the name was checked")
+	}
+
+	err = run(t, project, &coretest.Recorder{}, "--harnesses", "cursor")
+	if err == nil {
+		t.Fatal("an unknown harness was accepted")
+	}
+	if !strings.Contains(err.Error(), "claude") {
+		t.Errorf("error %q does not say which harnesses there are", err)
+	}
+}
+
+func TestSubcommandsRejectArgumentsTheyDoNotTake(t *testing.T) {
+	// Silently ignoring an argument is how `spu agent status --purge` comes to look like
+	// it did something.
+	for _, args := range [][]string{{"status", "--purge"}, {"migrate", "now"}} {
+		if err := run(t, t.TempDir(), &coretest.Recorder{}, args...); err == nil {
+			t.Errorf("%v was accepted", args)
+		}
+	}
+}
+
+func TestAnAnswersFileThatIsNotJSONIsRefused(t *testing.T) {
+	project := t.TempDir()
+	answers := filepath.Join(t.TempDir(), "answers.json")
+	if err := os.WriteFile(answers, []byte("{ nope"), 0o644); err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+	if err := run(t, project, &coretest.Recorder{}, "--answers", answers); err == nil {
+		t.Fatal("a malformed answers file was accepted")
+	}
+}
+
+func TestEditWorksWithoutATerminalWhenTheAnswersAreGiven(t *testing.T) {
+	// `--answers` exists so that a script can do what a person does. Refusing without a
+	// terminal regardless made the flag useless, which is what it was for.
+	project := t.TempDir()
+	if err := run(t, project, &coretest.Recorder{},
+		"--items", "conduct-of-commit", "--harnesses", "claude"); err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+
+	answers := filepath.Join(t.TempDir(), "edit.json")
+	if err := os.WriteFile(answers, []byte(`{"answers":{"conduct-of-commit":{"lint-commits":true}}}`), 0o644); err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+	if err := run(t, project, &coretest.Recorder{},
+		"edit", "--items", "conduct-of-commit", "--answers", answers); err != nil {
+		t.Fatalf("edit: %v", err)
+	}
+
+	body, err := os.ReadFile(filepath.Join(canonical(project), "prompts", "conduct-of-commit.md"))
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if !strings.Contains(string(body), "commitlint") {
+		t.Error("the answers given to edit were not applied")
+	}
+}

@@ -107,3 +107,49 @@ func TestAMissingPolicyIsNotASilentDefault(t *testing.T) {
 		t.Errorf("error %q does not mention the policy", err)
 	}
 }
+
+func TestDefaultsReadsWhatTheItemDeclares(t *testing.T) {
+	// A run with nobody to ask still has to answer the questions. The answers are the
+	// ones the item declares, read explicitly here rather than left to a validator,
+	// because a JSON Schema default is an annotation and nothing fills it in.
+	it, err := Parse([]byte(`{
+	  "id": "a", "version": 1, "policy": "reuse",
+	  "questions": {"type": "object", "properties": {
+	    "lint-commits": {"type": "boolean", "default": false},
+	    "language": {"type": "enum", "enum": ["ts", "go"], "default": "go"},
+	    "items": {"type": "array", "items": {"enum": ["x"]}, "default": ["x"]},
+	    "untitled": {"type": "string"}
+	  }},
+	  "outputs": [{"root": "agents", "path": "x.md", "content": [{"text": "hi"}]}]
+	}`))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+
+	got := it.Defaults()
+	if got["lint-commits"] != false {
+		t.Errorf("lint-commits = %v, want the declared false", got["lint-commits"])
+	}
+	if got["language"] != "go" {
+		t.Errorf("language = %v, want the declared go", got["language"])
+	}
+	if _, ok := got["items"]; !ok {
+		t.Errorf("a declared list default was dropped: %v", got)
+	}
+	// A question with no declared default is absent rather than invented, so a caller can
+	// tell "this was decided" from "nobody said".
+	if _, ok := got["untitled"]; ok {
+		t.Errorf("a question with no default was answered anyway: %v", got)
+	}
+}
+
+func TestAnItemWithNoQuestionsHasNoDefaults(t *testing.T) {
+	it, err := Parse([]byte(`{"id":"a","version":1,"policy":"reuse",
+	  "outputs":[{"root":"agents","path":"x.md","content":[{"text":"hi"}]}]}`))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if got := it.Defaults(); len(got) != 0 {
+		t.Errorf("Defaults = %v, want nothing", got)
+	}
+}

@@ -2,11 +2,15 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/soppylzz/soppy-utils/internal/agent/content"
 	"github.com/soppylzz/soppy-utils/internal/agent/harness"
@@ -26,20 +30,28 @@ func (Handler) Run(ctx context.Context, cmd core.Command, reply core.Responder) 
 		return err
 	}
 	sub := ""
+	var rest []string
 	if len(cmd.Args) > 0 {
 		sub = cmd.Args[0]
+		rest = cmd.Args[1:]
+		// A leading flag belongs to the run itself. `spu agent --items x` names no
+		// subcommand, and reading `--items` as one turned every flag into an unknown
+		// command.
+		if strings.HasPrefix(sub, "-") {
+			sub, rest = "", cmd.Args
+		}
 	}
 	switch sub {
 	case "":
-		return generate(ctx, project, reply)
+		return generate(ctx, project, rest, reply)
 	case "status":
-		return status(project, reply)
+		return status(project, rest, reply)
 	case "edit":
-		return edit(ctx, project, reply)
+		return edit(ctx, project, rest, reply)
 	case "migrate":
-		return migrate(project, reply)
+		return migrate(project, rest, reply)
 	default:
-		return fmt.Errorf("unknown agent command %q", sub)
+		return fmt.Errorf("unknown agent command %q; run spu agent --help", sub)
 	}
 }
 
@@ -61,7 +73,11 @@ func canonical(project string) string {
 	return harness.Dir(project, item.RootAgents)
 }
 
-func generate(ctx context.Context, project string, reply core.Responder) error {
+func generate(ctx context.Context, project string, args []string, reply core.Responder) error {
+	sel, err := parseSelection("agent", args)
+	if err != nil {
+		return err
+	}
 	items, err := content.Items()
 	if err != nil {
 		return err
@@ -70,23 +86,29 @@ func generate(ctx context.Context, project string, reply core.Responder) error {
 	if err != nil {
 		return err
 	}
-
-	if !reply.CanAsk() {
-		// Writing a default set nobody chose would create files in a project because a
-		// script ran, which is the opposite of what this command is for.
-		return errors.New("choosing what to generate needs somebody to choose; " +
-			"run spu agent in a terminal")
+	if err := sel.checkNames(items, harnessNames); err != nil {
+		return err
 	}
 
-	chosen, harnesses, err := choose(ctx, reply, items, led)
-	if err != nil {
-		return err
+	chosen, harnesses := sel.items, keepKnown(sel.harnesses)
+	if sel.wantsForm() {
+		if !reply.CanAsk() {
+			// Writing a set nobody chose would create files in a project because a script
+			// ran, which is the opposite of what this command is for.
+			return errors.New("choosing what to generate needs somebody to choose; " +
+				"run spu agent in a terminal, or name the items with --items")
+		}
+		picked, pickedHarnesses, err := choose(ctx, reply, items, led)
+		if err != nil {
+			return err
+		}
+		chosen, harnesses = picked, pickedHarnesses
 	}
 	if len(chosen) == 0 && len(harnesses) == 0 {
 		return reply.Finish(nil)
 	}
 
-	answers, err := ask(ctx, reply, items, chosen, led)
+	answers, err := ask(ctx, reply, items, chosen, led, sel)
 	if err != nil {
 		return err
 	}
@@ -246,10 +268,14 @@ func keepKnown(names []string) []string {
 
 // ask collects each chosen item's answers.
 //
-// An item's saved answers are the starting point, so re-running offers what was chosen
-// last time instead of a blank form that has to be filled in again.
+// Three sources, in order: what the item declares, what an answers file supplies, and what
+// a person says. An item's saved answers are the starting point for the form, so re-running
+// offers what was chosen last time instead of a blank form.
+//
+// When nobody is asked, what was decided is reported rather than decided quietly: a
+// generated document whose answers nobody chose should say so.
 func ask(ctx context.Context, reply core.Responder, items []item.Item, chosen []string,
-	led ledger.Ledger) (map[string]map[string]any, error) {
+	led ledger.Ledger, sel selection) (map[string]map[string]any, error) {
 
 	byID := make(map[string]item.Item, len(items))
 	for _, it := range items {
@@ -266,22 +292,70 @@ func ask(ctx context.Context, reply core.Responder, items []item.Item, chosen []
 			out[id] = nil
 			continue
 		}
-		saved := map[string]any{}
-		if recorded, ok := led.Find(id); ok {
-			saved = recorded.Answers
+
+		declared := it.Defaults()
+		for key, value := range sel.answers[id] {
+			declared[key] = value
 		}
-		spec, err := form.FromObjectSchema(it.Questions, saved)
-		if err != nil {
-			return nil, fmt.Errorf("item %s: %w", id, err)
+
+		if sel.interactive || !sel.flagged {
+			if !reply.CanAsk() {
+				return nil, fmt.Errorf("item %s asks questions and this run has nobody to "+
+					"ask; give the answers with --answers", id)
+			}
+			saved := declared
+			if !sel.hasAnswers(id) {
+				if recorded, ok := led.Find(id); ok {
+					for key, value := range recorded.Answers {
+						saved[key] = value
+					}
+				}
+			}
+			spec, err := form.FromObjectSchema(it.Questions, saved)
+			if err != nil {
+				return nil, fmt.Errorf("item %s: %w", id, err)
+			}
+			spec.Title = it.Title
+			answered, err := reply.Ask(ctx, spec)
+			if err != nil {
+				return nil, err
+			}
+			out[id] = answered
+			continue
 		}
-		spec.Title = it.Title
-		values, err := reply.Ask(ctx, spec)
-		if err != nil {
-			return nil, err
+
+		for _, key := range questionKeys(it) {
+			if _, ok := declared[key]; ok {
+				continue
+			}
+			return nil, fmt.Errorf("item %s asks %q and nothing answered it; give it in "+
+				"--answers, or run spu agent --interactive", id, key)
 		}
-		out[id] = values
+		for key := range declared {
+			if !sel.hasAnswers(id) {
+				_ = reply.Notify(fmt.Sprintf("%s: %s = %v (the item's default)", id, key, declared[key]))
+			}
+		}
+		out[id] = declared
 	}
 	return out, nil
+}
+
+// questionKeys lists what an item asks, so a scripted run can say which of them it had no
+// answer for rather than discovering it in the generated file.
+func questionKeys(it item.Item) []string {
+	var schema struct {
+		Properties map[string]json.RawMessage `json:"properties"`
+	}
+	if err := json.Unmarshal(it.Questions, &schema); err != nil {
+		return nil
+	}
+	out := make([]string, 0, len(schema.Properties))
+	for key := range schema.Properties {
+		out = append(out, key)
+	}
+	sort.Strings(out)
+	return out
 }
 
 func stringsOf(v any) []string {
@@ -302,7 +376,10 @@ func stringsOf(v any) []string {
 }
 
 // status reports what the ledger records against what is on disk. It writes nothing.
-func status(project string, reply core.Responder) error {
+func status(project string, args []string, reply core.Responder) error {
+	if err := acceptNoFlags("agent status", args); err != nil {
+		return err
+	}
 	led, err := ledger.Read(canonical(project))
 	if err != nil {
 		return err
@@ -358,9 +435,17 @@ func status(project string, reply core.Responder) error {
 // It is explicit rather than folded into the ordinary run, because answering a question
 // again is a decision about an item, and the run that collects the whole selection is not
 // the place for a decision about one of them.
-func edit(ctx context.Context, project string, reply core.Responder) error {
-	if !reply.CanAsk() {
-		return errors.New("editing answers needs somebody to answer; run spu agent in a terminal")
+func edit(ctx context.Context, project string, args []string, reply core.Responder) error {
+	sel, err := parseSelection("agent edit", args)
+	if err != nil {
+		return err
+	}
+	// Only a run that has to show something needs somebody to show it to. `--answers` is
+	// how this command is used without a terminal, so requiring one whenever the client
+	// cannot ask made the flag useless.
+	if sel.wantsForm() && !reply.CanAsk() {
+		return errors.New("editing answers needs somebody to answer; run spu agent in a " +
+			"terminal, or name the items and answer them with --answers")
 	}
 	led, err := ledger.Read(canonical(project))
 	if err != nil {
@@ -378,14 +463,21 @@ func edit(ctx context.Context, project string, reply core.Responder) error {
 		chosen = append(chosen, it.ID)
 	}
 
-	picked, harnesses, err := choose(ctx, reply, filter(items, chosen), led)
-	if err != nil {
-		return err
+	harnesses := led.Harnesses
+	picked := sel.items
+	if sel.wantsForm() {
+		picked, harnesses, err = choose(ctx, reply, filter(items, chosen), led)
+		if err != nil {
+			return err
+		}
 	}
-	if len(harnesses) == 0 {
+	if len(picked) == 0 || len(harnesses) == 0 {
 		harnesses = led.Harnesses
 	}
-	answers, err := ask(ctx, reply, items, picked, led)
+	if err := sel.checkNames(items, harnessNames); err != nil {
+		return err
+	}
+	answers, err := ask(ctx, reply, items, picked, led, sel)
 	if err != nil {
 		return err
 	}
@@ -421,7 +513,10 @@ func edit(ctx context.Context, project string, reply core.Responder) error {
 // It only ever records what it finds already matching what spu would write: a file that
 // differs is not evidence of anything, and claiming it would let the next run replace
 // something nobody agreed to.
-func migrate(project string, reply core.Responder) error {
+func migrate(project string, args []string, reply core.Responder) error {
+	if err := acceptNoFlags("agent migrate", args); err != nil {
+		return err
+	}
 	led, err := ledger.Read(canonical(project))
 	if err != nil {
 		return err
@@ -484,4 +579,23 @@ func filter(items []item.Item, keep []string) []item.Item {
 		}
 	}
 	return out
+}
+
+// acceptNoFlags is for a subcommand that takes none.
+//
+// Silently ignoring an argument is how `spu agent status --purge` comes to look like it
+// did something.
+func acceptNoFlags(name string, args []string) error {
+	fs := flag.NewFlagSet(name, flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	if err := fs.Parse(args); err != nil {
+		// The flag package says "flag provided but not defined", which is true and does
+		// not say that this subcommand has no flags at all.
+		return fmt.Errorf("%s takes no flags; run spu %s --help", name, name)
+	}
+	if fs.NArg() != 0 {
+		return fmt.Errorf("%s takes no arguments, but was given %s", name,
+			strings.Join(fs.Args(), " "))
+	}
+	return nil
 }
