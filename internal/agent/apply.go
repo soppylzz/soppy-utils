@@ -155,6 +155,16 @@ func record(out *ledger.Ledger, step Step) {
 func report(reply core.Responder, step Step) {
 	switch step.Decision.Reason {
 	case decide.Foreign:
+		// A file holding exactly what spu would write is one spu wrote before the item was
+		// handed over — dropping an item leaves its output behind, and choosing it again
+		// finds that output with nothing recorded to explain it. Telling the reader to
+		// move it aside is wrong advice for a file that is already correct.
+		if existing, err := os.ReadFile(step.Path); err == nil && string(existing) == string(step.Content) {
+			_ = reply.Warn(fmt.Sprintf("%s already holds what spu would write, but nothing "+
+				"records it; run 'spu agent migrate' to take it back under management",
+				step.Path))
+			return
+		}
 		_ = reply.Warn(fmt.Sprintf("%s already exists and was not written by spu; "+
 			"leaving it. Move it aside or add your own document beside it.", step.Path))
 	case decide.Edited:

@@ -846,3 +846,40 @@ func TestTheRecordsSpuWritesAreNotAnnouncedAsGivenAway(t *testing.T) {
 		}
 	}
 }
+
+func TestAFileThatWasHandedOverCanBeTakenBack(t *testing.T) {
+	// Dropping an item leaves its output behind on purpose. Choosing it again finds that
+	// output with nothing recorded to explain it, and the advice to "move it aside" is
+	// wrong for a file that already holds exactly what spu would write.
+	project := t.TempDir()
+	if err := run(t, project, &coretest.Recorder{}, "--items", "conduct-of-go,conduct-of-docs"); err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+	if err := run(t, project, &coretest.Recorder{}, "--items", "conduct-of-go"); err != nil {
+		t.Fatalf("narrow: %v", err)
+	}
+
+	reply := &coretest.Recorder{}
+	if err := run(t, project, reply, "--items", "conduct-of-go,conduct-of-docs"); err != nil {
+		t.Fatalf("re-select: %v", err)
+	}
+	said := strings.Join(reply.Warnings, "\n")
+	if strings.Contains(said, "Move it aside") {
+		t.Errorf("a file holding exactly what spu would write was reported as somebody else's:\n%s", said)
+	}
+	if !strings.Contains(said, "migrate") {
+		t.Errorf("nothing said how to take it back:\n%s", said)
+	}
+
+	// And that advice works.
+	if err := run(t, project, &coretest.Recorder{}, "migrate"); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	led, err := readLedger(project)
+	if err != nil {
+		t.Fatalf("readLedger: %v", err)
+	}
+	if _, ok := led.Find("conduct-of-docs"); !ok {
+		t.Error("migrate did not take the file back")
+	}
+}
