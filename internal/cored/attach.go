@@ -52,11 +52,12 @@ type AttachOptions struct {
 func attach(ctx context.Context, opts AttachOptions) (net.Conn, error) {
 	if conn, err := transport.Dial(opts.Endpoint); err == nil {
 		return conn, nil
-	}
-
-	if len(opts.Spawn) == 0 {
-		return nil, fmt.Errorf("no core is listening on %s and none was offered to start",
-			opts.Endpoint.Address)
+	} else if len(opts.Spawn) == 0 {
+		// The reason the dial failed is the useful part, and on a platform whose
+		// transport is newer than this message the only part: a refused descriptor and a
+		// name nobody bound look identical otherwise.
+		return nil, fmt.Errorf("no core is listening on %s and none was offered to "+
+			"start: %w", opts.Endpoint.Address, err)
 	}
 	if opts.Budget <= 0 {
 		opts.Budget = 2 * time.Second
