@@ -102,12 +102,24 @@ func (l *Listener) Accept() (net.Conn, error) {
 		return nil, errors.New("transport: the listener is closed")
 	}
 
-	if err := windows.ConnectNamedPipe(handle, nil); err != nil {
-		// A client that connected between the instance being made and this call is not a
-		// failure; it is the case this call exists to notice.
-		if !errors.Is(err, windows.ERROR_PIPE_CONNECTED) {
-			return nil, err
+	for {
+		err := windows.ConnectNamedPipe(handle, nil)
+		if err == nil {
+			break
 		}
+		if errors.Is(err, windows.ERROR_PIPE_CONNECTED) {
+			// A client connected between the instance being made and this call. That is
+			// the case this call exists to notice, not a failure.
+			break
+		}
+		if errors.Is(err, windows.ERROR_NO_DATA) || errors.Is(err, windows.ERROR_PIPE_NOT_CONNECTED) {
+			// A client connected and went away before this call noticed — which is what a
+			// caller probing for a daemon leaves behind, and what this package's own
+			// Listen does before it creates its first instance. That is an ordinary thing
+			// to happen to a pipe and not a reason to stop accepting.
+			continue
+		}
+		return nil, err
 	}
 
 	conn, err := newPipeConn(handle)
