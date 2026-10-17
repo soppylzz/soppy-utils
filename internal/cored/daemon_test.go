@@ -124,7 +124,7 @@ func newHarness(t *testing.T, opts Options) *harness {
 
 	root := tempDir(t)
 
-	ep, err := transport.Resolve("linux", root, "")
+	ep, err := transport.Resolve(runtime.GOOS, root, "")
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}

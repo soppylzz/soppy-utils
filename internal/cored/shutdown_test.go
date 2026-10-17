@@ -7,6 +7,7 @@ import (
 
 	"github.com/soppylzz/soppy-utils/internal/core"
 	"github.com/soppylzz/soppy-utils/internal/transport"
+	"runtime"
 )
 
 func TestShutdownStopsARunningCore(t *testing.T) {
@@ -28,7 +29,7 @@ func TestShutdownIsNotAnErrorWhenNothingIsRunning(t *testing.T) {
 	// The caller wants a core that is not running, and that is the state it is already
 	// in. Reporting failure would make every uninstall on a quiet machine look broken.
 	root := shortDir(t)
-	ep, err := transport.Resolve("linux", root, "")
+	ep, err := transport.Resolve(runtime.GOOS, root, "")
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}

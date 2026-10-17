@@ -97,7 +97,7 @@ func newDaemon(t *testing.T, opts cored.Options) transport.Endpoint {
 
 	root := tempDir(t)
 
-	ep, err := transport.Resolve("linux", root, "")
+	ep, err := transport.Resolve(runtime.GOOS, root, "")
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}

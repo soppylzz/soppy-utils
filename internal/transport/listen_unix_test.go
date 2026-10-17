@@ -20,7 +20,7 @@ func tempEndpoint(t *testing.T) Endpoint {
 	t.Helper()
 	root := tempDir(t)
 
-	ep, err := Resolve("linux", root, "")
+	ep, err := Resolve(runtime.GOOS, root, "")
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}

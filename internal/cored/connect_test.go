@@ -3,6 +3,8 @@ package cored
 import (
 	"context"
 	"encoding/json"
+	"runtime"
+
 	"os"
 	"path/filepath"
 	"strconv"
@@ -67,7 +69,7 @@ func TestFakeCoreHelper(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SPU_TEST_FAKE_PROTOCOL: %v", err)
 	}
-	ep, err := transport.Resolve("linux", home, "")
+	ep, err := transport.Resolve(runtime.GOOS, home, "")
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
@@ -89,7 +91,7 @@ func spawnAsFakeCore(t *testing.T, home string, version int) (argv, env []string
 func endpointsFor(t *testing.T) (home string, ep transport.Endpoint) {
 	t.Helper()
 	home = shortDir(t)
-	ep, err := transport.Resolve("linux", home, "")
+	ep, err := transport.Resolve(runtime.GOOS, home, "")
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}

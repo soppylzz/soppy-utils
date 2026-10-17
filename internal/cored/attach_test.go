@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"runtime"
+
 	"os"
 	"path/filepath"
 	"testing"
@@ -47,7 +49,7 @@ func TestSpawnedDaemonHelper(t *testing.T) {
 		}
 	}
 
-	ep, err := transport.Resolve("linux", home, "")
+	ep, err := transport.Resolve(runtime.GOOS, home, "")
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
@@ -131,7 +133,7 @@ func TestAttachUsesADaemonThatIsAlreadyRunning(t *testing.T) {
 
 func TestAttachStartsADaemonWhenNoneIsRunning(t *testing.T) {
 	home := shortDir(t)
-	ep, err := transport.Resolve("linux", home, "")
+	ep, err := transport.Resolve(runtime.GOOS, home, "")
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
@@ -183,7 +185,7 @@ func TestAttachStartsADaemonWhenNoneIsRunning(t *testing.T) {
 
 func TestAttachGivesUpWhenTheSpawnedDaemonNeverAnswers(t *testing.T) {
 	home := shortDir(t)
-	ep, err := transport.Resolve("linux", home, "")
+	ep, err := transport.Resolve(runtime.GOOS, home, "")
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
@@ -207,7 +209,7 @@ func TestAttachGivesUpWhenTheSpawnedDaemonNeverAnswers(t *testing.T) {
 
 func TestAttachReportsThatNoDaemonCouldBeStarted(t *testing.T) {
 	home := shortDir(t)
-	ep, err := transport.Resolve("linux", home, "")
+	ep, err := transport.Resolve(runtime.GOOS, home, "")
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
@@ -228,7 +230,7 @@ func TestAttachCreatesTheDirectoryTheDaemonLogNeeds(t *testing.T) {
 	// and the daemon's log is the first thing that wants one. Failing here would mean
 	// spu could not run at all until something else had created the directory.
 	home := shortDir(t)
-	ep, err := transport.Resolve("linux", home, "")
+	ep, err := transport.Resolve(runtime.GOOS, home, "")
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
