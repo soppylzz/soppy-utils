@@ -113,10 +113,16 @@ func (l *Listener) Accept() (net.Conn, error) {
 			break
 		}
 		if errors.Is(err, windows.ERROR_NO_DATA) || errors.Is(err, windows.ERROR_PIPE_NOT_CONNECTED) {
-			// A client connected and went away before this call noticed — which is what a
-			// caller probing for a daemon leaves behind, and what this package's own
-			// Listen does before it creates its first instance. That is an ordinary thing
-			// to happen to a pipe and not a reason to stop accepting.
+			// A client connected and went away before this call noticed — what a caller
+			// probing for a daemon leaves behind, and what this package's own Listen does
+			// before it creates its first instance.
+			//
+			// The instance is left in the connected state by that, and Connecting it again
+			// fails until it is disconnected: without this, the one instance stays
+			// unusable and every client is told "All pipe instances are busy".
+			if derr := windows.DisconnectNamedPipe(handle); derr != nil {
+				return nil, derr
+			}
 			continue
 		}
 		return nil, err
