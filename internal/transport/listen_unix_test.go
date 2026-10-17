@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/soppylzz/soppy-utils/internal/protocol"
@@ -17,11 +18,7 @@ import (
 // own short root.
 func tempEndpoint(t *testing.T) Endpoint {
 	t.Helper()
-	root, err := os.MkdirTemp("/tmp", "spu")
-	if err != nil {
-		t.Fatalf("MkdirTemp: %v", err)
-	}
-	t.Cleanup(func() { os.RemoveAll(root) })
+	root := tempDir(t)
 
 	ep, err := Resolve("linux", root, "")
 	if err != nil {
@@ -203,4 +200,23 @@ func TestAListenerCanLeaveItsSocketBehind(t *testing.T) {
 	if _, err := os.Stat(ep.Address); err != nil {
 		t.Errorf("the socket file was removed although the listener was told to leave it: %v", err)
 	}
+}
+
+// tempDir is where a test may put a socket.
+//
+// A Unix socket path is capped at about a hundred bytes, and a per-test temporary
+// directory under /var/folders on macOS is longer than that before the socket's own name
+// is added. /tmp is short and exists on every Unix. It does not exist on Windows, where
+// there is no such cap and the ordinary temporary directory is the right answer.
+func tempDir(t *testing.T) string {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		return t.TempDir()
+	}
+	dir, err := os.MkdirTemp("/tmp", "spu")
+	if err != nil {
+		t.Fatalf("MkdirTemp: %v", err)
+	}
+	t.Cleanup(func() { os.RemoveAll(dir) })
+	return dir
 }

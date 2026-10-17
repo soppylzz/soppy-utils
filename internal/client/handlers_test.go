@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"runtime"
 	"testing"
 	"time"
 
@@ -94,11 +95,7 @@ func (e errorString) Error() string { return string(e) }
 func newDaemon(t *testing.T, opts cored.Options) transport.Endpoint {
 	t.Helper()
 
-	root, err := os.MkdirTemp("/tmp", "spu")
-	if err != nil {
-		t.Fatalf("MkdirTemp: %v", err)
-	}
-	t.Cleanup(func() { os.RemoveAll(root) })
+	root := tempDir(t)
 
 	ep, err := transport.Resolve("linux", root, "")
 	if err != nil {
@@ -153,4 +150,23 @@ func confirmAsker(question string, answers chan bool) core.Handler {
 		}
 		return reply.Finish(nil)
 	})
+}
+
+// tempDir is where a test may put a socket.
+//
+// A Unix socket path is capped at about a hundred bytes, and a per-test temporary
+// directory under /var/folders on macOS is longer than that before the socket's own name
+// is added. /tmp is short and exists on every Unix. It does not exist on Windows, where
+// there is no such cap and the ordinary temporary directory is the right answer.
+func tempDir(t *testing.T) string {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		return t.TempDir()
+	}
+	dir, err := os.MkdirTemp("/tmp", "spu")
+	if err != nil {
+		t.Fatalf("MkdirTemp: %v", err)
+	}
+	t.Cleanup(func() { os.RemoveAll(dir) })
+	return dir
 }

@@ -77,11 +77,7 @@ func spawnAsDaemon(t *testing.T, home, report string) (argv, env []string) {
 
 func shortDir(t *testing.T) string {
 	t.Helper()
-	dir, err := os.MkdirTemp("/tmp", "spu")
-	if err != nil {
-		t.Fatalf("MkdirTemp: %v", err)
-	}
-	t.Cleanup(func() { os.RemoveAll(dir) })
+	dir := tempDir(t)
 	return dir
 }
 
