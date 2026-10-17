@@ -102,6 +102,16 @@ func (l *Listener) Accept() (net.Conn, error) {
 		return nil, errors.New("transport: the listener is closed")
 	}
 
+	// The next instance is made before this one is waited on, not after it is taken.
+	// Windows gives a client "All pipe instances are busy" when every instance is
+	// connected and none is free, and a listener that makes its next instance only after
+	// a client has been accepted has exactly that gap: between the connection arriving and
+	// the next instance existing, anybody else dialling is told the pipe is busy.
+	next, err := createInstance(l.name, l.sa)
+	if err != nil {
+		return nil, fmt.Errorf("create the next instance of %s: %w", l.name, err)
+	}
+
 	for {
 		err := windows.ConnectNamedPipe(handle, nil)
 		if err == nil {
@@ -115,27 +125,22 @@ func (l *Listener) Accept() (net.Conn, error) {
 		if errors.Is(err, windows.ERROR_NO_DATA) || errors.Is(err, windows.ERROR_PIPE_NOT_CONNECTED) {
 			// A client connected and went away before this call noticed — what a caller
 			// probing for a daemon leaves behind, and what this package's own Listen does
-			// before it creates its first instance.
-			//
-			// The instance is left in the connected state by that, and Connecting it again
-			// fails until it is disconnected: without this, the one instance stays
-			// unusable and every client is told "All pipe instances are busy".
+			// before it creates its first instance. The instance is left connected by
+			// that, and connecting it again fails until it is disconnected.
 			if derr := windows.DisconnectNamedPipe(handle); derr != nil {
+				windows.CloseHandle(next)
 				return nil, derr
 			}
 			continue
 		}
+		windows.CloseHandle(next)
 		return nil, err
 	}
 
 	conn, err := newPipeConn(handle)
 	if err != nil {
+		windows.CloseHandle(next)
 		return nil, err
-	}
-	next, err := createInstance(l.name, l.sa)
-	if err != nil {
-		conn.Close()
-		return nil, fmt.Errorf("create the next instance of %s: %w", l.name, err)
 	}
 
 	l.mu.Lock()
