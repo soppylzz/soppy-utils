@@ -1,24 +1,29 @@
 #!/usr/bin/env bash
 
 spu_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)" || return 1
-source "$spu_root/src/vscode.sh"
 source "$spu_root/src/utils/style.sh"
 
-spu_helper() {
-  local helper="$spu_root/libexec/spu-helper"
+# spu_go runs the Go executable. It is both the client and, when a client cannot reach
+# one, the core it talks to: one binary, so the two can never be different builds.
+spu_go() {
+  local exe="$spu_root/libexec/spu"
   if [[ "${OSTYPE:-}" == msys* || "${OSTYPE:-}" == cygwin* ]]; then
-    helper="$helper.exe"
+    exe="$exe.exe"
     if command -v cygpath >/dev/null 2>&1; then
       SPU_HOME_NATIVE="$(cygpath -w "$HOME")"
       export SPU_HOME_NATIVE
+      # The same conversion for the directory the client was run from, because a command
+      # that works on a project needs a path the native daemon can open.
+      SPU_WORKDIR_NATIVE="$(cygpath -w "$PWD")"
+      export SPU_WORKDIR_NATIVE
     fi
   fi
-  if [[ -x "$helper" ]]; then
-    "$helper" "$@"
+  if [[ -x "$exe" ]]; then
+    "$exe" "$@"
   elif command -v go >/dev/null 2>&1 && [[ -f "$spu_root/go.mod" ]]; then
-    (cd "$spu_root" && go run ./cmd/spu-helper "$@")
+    (cd "$spu_root" && go run ./cmd/spu "$@")
   else
-    printf '%s\n' 'spu: Go helper binary is missing; reinstall soppy-utils' >&2
+    printf '%s\n' 'spu: the Go binary is missing; reinstall soppy-utils' >&2
     return 1
   fi
 }
@@ -26,28 +31,24 @@ spu_helper() {
 spu() {
   local util="${1:-}"
   case "$util" in
-  '' | help | -h)
-    printf '%s\n' 'Usage: spu <util> [args]' 'Utils: vscode, license, welcome, git, update'
-    ;;
-  --help)
-    printf '%s\n' 'Usage: spu <util> [args]' '  vscode   Open VS Code configuration' '  license  Generate MIT or ISC license' '  welcome  Generate a shell banner' '  git      Manage global Git defaults' '  update   Upgrade soppy-utils'
-    ;;
-  --version) spu_helper --version ;;
-  vscode)
-    shift
-    vscode_main "$@"
-    ;;
-  license | welcome | git)
-    shift
-    spu_helper "$util" "$@"
-    ;;
+  # Help and version are the binary's: the list of utils lives in its registry, and a
+  # copy of it here is a copy that can be wrong.
+  '' | help | -h | --help | --version) spu_go "$@" ;;
+  # Upgrading is the installer's job, not a util's: it replaces the installation this
+  # launcher points at, and that is shell. It lives here rather than in the binary because
+  # the client has nothing to do with it, and because a package manager can take the same
+  # place later without the binary learning about any of them.
   update)
     shift
     bash "$spu_root/scripts/update.sh" "$@"
     ;;
-  *)
-    err "spu: unknown util: $util"
-    return 1
-    ;;
+  # Everything else is the Go binary's to route. A list of utils here would be a second
+  # list to keep in step with the registry, and it was already one: __core was unknown to
+  # this dispatcher, so the scripts could not ask a running core to stop.
+  #
+  # This case has to stay last. It was once written before the update case, which made
+  # update unreachable — ShellCheck's SC2222, and an upgrade path that silently stopped
+  # working.
+  *) spu_go "$@" ;;
   esac
 }

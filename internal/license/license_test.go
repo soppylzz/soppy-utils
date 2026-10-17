@@ -1,6 +1,9 @@
 package license
 
 import (
+	"context"
+	"github.com/soppylzz/soppy-utils/internal/core/coretest"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,7 +12,7 @@ import (
 
 func TestRenderKnownLegalText(t *testing.T) {
 	for _, kind := range []string{"mit", "isc"} {
-		b, err := Render(kind, "Alice", 2026)
+		b, err := render(kind, "Alice", 2026)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -35,7 +38,8 @@ func TestExplicitAnswersRepairVersionConflict(t *testing.T) {
 	if err := os.WriteFile(answers, raw, 0600); err != nil {
 		t.Fatal(err)
 	}
-	if err := Run(home, []string{"migrate", "--answers", answers}); err != nil {
+	if err := Run(context.Background(), sessionFor(home),
+		[]string{"migrate", "--answers", answers}, io.Discard, &coretest.Recorder{}); err != nil {
 		t.Fatal(err)
 	}
 	v := s.Read()

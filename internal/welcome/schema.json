@@ -6,12 +6,46 @@
     "schema_version",
     "data"
   ],
+  "x-spu-ui": {
+    "title": "Welcome banner",
+    "order": [
+      "name",
+      "device",
+      "message",
+      "rc",
+      "banner_in_tmux"
+    ],
+    "fields": {
+      "name": {
+        "title": "Banner name"
+      },
+      "device": {
+        "title": "Device name"
+      },
+      "message": {
+        "title": "Message"
+      },
+      "rc": {
+        "title": "Startup hook",
+        "options": {
+          "none": "None",
+          "bash": "Bash",
+          "zsh": "Zsh",
+          "both": "Both"
+        }
+      },
+      "banner_in_tmux": {
+        "title": "Show the banner inside tmux",
+        "help": "Every new pane runs your startup file, so this is off unless you want one in each"
+      }
+    }
+  },
   "properties": {
     "util": {
       "const": "welcome"
     },
     "schema_version": {
-      "const": 1
+      "const": 2
     },
     "data": {
       "type": "object",
@@ -19,7 +53,8 @@
         "name",
         "device",
         "message",
-        "rc"
+        "rc",
+        "banner_in_tmux"
       ],
       "properties": {
         "name": {
@@ -40,6 +75,9 @@
             "zsh",
             "both"
           ]
+        },
+        "banner_in_tmux": {
+          "type": "boolean"
         }
       },
       "additionalProperties": false

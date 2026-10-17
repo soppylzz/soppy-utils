@@ -139,20 +139,35 @@ fi
 mkdir "$tmp/stage"
 tar -xzf "$tmp/$filename" -C "$tmp/stage"
 
-helper="$tmp/stage/libexec/spu-helper"
-[[ "$platform" == windows ]] && helper="$helper.exe"
-[[ -f "$tmp/stage/bin/spu" && -f "$tmp/stage/src/spu.sh" && -f "$tmp/stage/src/utils/style.sh" && -f "$tmp/stage/scripts/update.sh" && -x "$helper" ]] || {
+binary="$tmp/stage/libexec/spu"
+binary_suffix=''
+[[ "$platform" == windows ]] && {
+  binary="$binary.exe"
+  binary_suffix='.exe'
+}
+[[ -f "$tmp/stage/bin/spu" && -f "$tmp/stage/src/spu.sh" && -f "$tmp/stage/src/utils/style.sh" && -f "$tmp/stage/scripts/update.sh" && -x "$binary" ]] || {
   echo 'install: incomplete package' >&2
   exit 1
 }
-[[ "$("$helper" --version)" == "$version" ]] || {
-  echo 'install: helper version mismatch' >&2
+[[ "$("$binary" --version)" == "$version" ]] || {
+  echo 'install: binary version mismatch' >&2
   exit 1
 }
 [[ "$(bash "$tmp/stage/bin/spu" --version)" == "$version" ]] || {
   echo 'install: launcher smoke test failed' >&2
   exit 1
 }
+
+# Stop any core the installation is running, before the swap. On Windows a running
+# executable cannot be replaced, and on every platform a daemon left behind is a process
+# holding a file that no longer exists. The old binary is the one to ask, because the
+# daemon it started is the one running.
+installed="$target/libexec/spu$binary_suffix"
+if [[ -x "$installed" ]]; then
+  if ! "$installed" __core shutdown; then
+    echo 'install: the running core did not stop; it is about to be replaced underneath' >&2
+  fi
+fi
 
 mkdir -p "$(dirname "$target")" "$(dirname "$launcher")"
 backup="$tmp/previous"
@@ -182,5 +197,5 @@ if ! bash "$launcher" --version >/dev/null; then
   exit 1
 fi
 
-"$target/libexec/spu-helper${helper##*spu-helper}" config-status
+"$target/libexec/spu$binary_suffix" config-status
 printf 'soppy-utils %s installed at %s\n' "$version" "$target"

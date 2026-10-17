@@ -11,7 +11,6 @@ import (
 const (
 	errorColor = 31
 	warnColor  = 33
-	infoColor  = 36
 )
 
 func colorEnabled() bool {
@@ -32,12 +31,4 @@ func Error(scope, message string) {
 
 func Warn(scope, message string) {
 	write(os.Stderr, colorEnabled(), warnColor, "warning: "+scope+": "+message)
-}
-
-func Info(scope, message string) {
-	write(os.Stderr, colorEnabled(), infoColor, scope+": "+message)
-}
-
-func Note(message string) {
-	write(os.Stderr, colorEnabled(), infoColor, message)
 }

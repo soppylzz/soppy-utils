@@ -24,7 +24,7 @@ type Store struct {
 	Defaults   map[string]any
 }
 
-type Envelope struct {
+type envelope struct {
 	Util          string         `json:"util"`
 	SchemaVersion int            `json:"schema_version"`
 	Data          map[string]any `json:"data"`
@@ -57,19 +57,25 @@ func copyMap(m map[string]any) map[string]any {
 }
 
 func (s Store) Validate(data map[string]any) error {
-	return validateEnvelope(s.Schema, Envelope{Util: s.Util, SchemaVersion: s.Current, Data: data})
+	return validateEnvelope(s.Util, s.Schema, envelope{Util: s.Util, SchemaVersion: s.Current, Data: data})
 }
 
-func validateEnvelope(schemaBytes []byte, env Envelope) error {
+func validateEnvelope(util string, schemaBytes []byte, env envelope) error {
 	var raw any
 	if err := json.Unmarshal(schemaBytes, &raw); err != nil {
 		return err
 	}
+	// The schema is registered under a name of its own rather than a relative one. A
+	// relative name is resolved against the working directory of whichever process is
+	// validating, so a failure reported a path like file:///tmp/<somewhere>/schema.json:
+	// a file that does not exist, in a directory the reader has never heard of, at the
+	// top of an otherwise useful message.
+	id := "urn:spu:" + util + ":schema"
 	compiler := jsonschema.NewCompiler()
-	if err := compiler.AddResource("schema.json", raw); err != nil {
+	if err := compiler.AddResource(id, raw); err != nil {
 		return err
 	}
-	schema, err := compiler.Compile("schema.json")
+	schema, err := compiler.Compile(id)
 	if err != nil {
 		return err
 	}
@@ -91,7 +97,7 @@ func (s Store) Read() View {
 		return v
 	}
 	n, err := strconv.Atoi(strings.TrimSpace(string(marker)))
-	var env Envelope
+	var env envelope
 	if err != nil || json.Unmarshal(raw, &env) != nil || env.Util != s.Util || n != env.SchemaVersion || n < 0 {
 		v.Writable = false
 		v.Warning = "VERSION/config.json conflict or malformed config; run 'spu " + s.Util + " migrate'"
@@ -115,7 +121,7 @@ func (s Store) Read() View {
 			v.Warning = fmt.Sprintf("unsupported old config contract %d; use a compatible migration tool", n)
 			return v
 		}
-		if err := validateEnvelope(oldSchema, env); err != nil {
+		if err := validateEnvelope(s.Util, oldSchema, env); err != nil {
 			v.Writable = false
 			v.Warning = "invalid old config: " + err.Error()
 			return v
@@ -148,7 +154,7 @@ func (s Store) Save(data map[string]any) error {
 	if err := os.MkdirAll(s.Dir(), 0700); err != nil {
 		return err
 	}
-	env := Envelope{Util: s.Util, SchemaVersion: s.Current, Data: data}
+	env := envelope{Util: s.Util, SchemaVersion: s.Current, Data: data}
 	b, err := json.MarshalIndent(env, "", "  ")
 	if err != nil {
 		return err
@@ -182,7 +188,7 @@ func (s Store) LoadAnswers(path string) (map[string]any, error) {
 	if len(b) > 1024*1024 {
 		return nil, errors.New("answers file is too large")
 	}
-	var env Envelope
+	var env envelope
 	if err := json.Unmarshal(b, &env); err != nil {
 		return nil, err
 	}

@@ -7,24 +7,23 @@
       "Grep",
       "Edit",
       "Write",
-      "Bash(bash:*)",
       "Bash(go:*)",
-      "Bash(gofmt:*)",
-      "Bash(shellcheck:*)",
-      "Bash(shfmt:*)",
       "Bash(git:*)",
+      "Bash(bash:*)",
+      "Bash(shfmt:*)",
+      "Bash(gofmt:*)",
+      "Bash(gh pr *)",
+      "Bash(gh run *)",
+      "Bash(shellcheck:*)",
       "WebFetch(domain:github.com)",
       "WebFetch(domain:raw.githubusercontent.com)"
     ],
-    "ask": [
-      "Bash(git commit:*)"
-    ],
     "deny": [
-      "Bash(rm -rf:*)",
+      "Edit(./.env*)",
       "Read(./.env*)",
       "Read(./**/.env*)",
       "Read(./secrets/**)",
-      "Edit(./.env*)",
+      "Bash(rm -rf:*)",
       "Bash(curl * | bash:*)"
     ],
     "defaultMode": "acceptEdits"

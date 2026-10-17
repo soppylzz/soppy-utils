@@ -2,30 +2,31 @@ package welcome
 
 import (
 	"bytes"
+	"context"
 	"embed"
 	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"text/template"
 
-	"charm.land/huh/v2"
-	"github.com/soppylzz/soppy-utils/internal/clioutput"
 	"github.com/soppylzz/soppy-utils/internal/configstore"
+	"github.com/soppylzz/soppy-utils/internal/core"
+	"github.com/soppylzz/soppy-utils/internal/form"
 	"github.com/soppylzz/soppy-utils/internal/managedfile"
-	"github.com/soppylzz/soppy-utils/internal/ui"
 )
 
-//go:embed schema.json schema-v0.json templates/*.tmpl
+//go:embed schema.json schema-v1.json schema-v0.json templates/*.tmpl
 var assets embed.FS
 
 const start = "# >>> soppy-utils welcome >>>"
 const end = "# <<< soppy-utils welcome <<<"
-const templateRevision = 5
+const templateRevision = 6
 const hook = start + "\ncase $- in\n  *i*)\n    if [ -r \"$HOME/.config/soppy-utils/welcome/welcome.sh\" ]; then\n      SPU_WELCOME_INTERACTIVE=1 bash \"$HOME/.config/soppy-utils/welcome/welcome.sh\"\n    fi\n    ;;\nesac\n" + end + "\n"
 const legacyHook = start + "\ncase $- in\n  *i*)\n    if [ -r \"$HOME/.config/soppy-utils/welcome.sh\" ]; then\n      . \"$HOME/.config/soppy-utils/welcome.sh\"\n    fi\n    ;;\nesac\n" + end + "\n"
 
@@ -40,6 +41,7 @@ var Version = "dev"
 
 func Store(home string) configstore.Store {
 	schema, _ := assets.ReadFile("schema.json")
+	previous, _ := assets.ReadFile("schema-v1.json")
 	old, _ := assets.ReadFile("schema-v0.json")
 	name := os.Getenv("USER")
 	if name == "" {
@@ -52,13 +54,33 @@ func Store(home string) configstore.Store {
 	if device == "" {
 		device = "computer"
 	}
-	return configstore.Store{Home: home, Util: "welcome", Current: 1, Schema: schema, OldSchemas: map[int][]byte{0: old}, Defaults: map[string]any{"name": name, "device": device, "message": "Ready to hack the universe.", "rc": "none"}}
+	return configstore.Store{
+		Home: home, Util: "welcome", Current: 2, Schema: schema,
+		OldSchemas: map[int][]byte{0: old, 1: previous},
+		Defaults: map[string]any{
+			"name": name, "device": device,
+			"message": "Ready to hack the universe.", "rc": "none",
+			// Absent from a v1 file, so this is also the whole of the migration: a
+			// stored configuration keeps its values, gains this one, and is warned about
+			// until the user chooses to persist it.
+			"banner_in_tmux": false,
+		},
+	}
 }
 
-// ShellQuote encodes data as one Bash single-quoted word.
-func ShellQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", "'\"'\"'") + "'" }
+// shellQuote encodes data as one Bash single-quoted word.
+func shellQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", "'\"'\"'") + "'" }
 
-func Render(data map[string]any) ([]byte, error) {
+// bannerInTmux reports whether the banner prints inside tmux.
+//
+// An absent value is false, which is the default: one banner per pane is not what
+// anybody wants.
+func bannerInTmux(data map[string]any) bool {
+	inTmux, _ := data["banner_in_tmux"].(bool)
+	return inTmux
+}
+
+func render(data map[string]any) ([]byte, error) {
 	body, err := assets.ReadFile("templates/banner.sh.tmpl")
 	if err != nil {
 		return nil, err
@@ -74,12 +96,20 @@ func Render(data map[string]any) ([]byte, error) {
 if [[ ${SPU_WELCOME_INTERACTIVE:-} != 1 ]]; then exit 0; fi
 if [[ ! -t 0 && ! -t 1 && ! -t 2 ]] && ! (: </dev/tty) 2>/dev/null; then exit 0; fi
 `)
+	// Baked into the script rather than looked up at startup: the generated banner runs
+	// in the user's shell, and reading configuration there would make it depend on spu
+	// being installed and working.
+	if !bannerInTmux(data) {
+		out.WriteString("# Every new tmux pane runs the startup file too, and a banner in each of them is\n" +
+			"# not what anybody wants, so the banner stays out of tmux unless it was asked for.\n" +
+			"if [[ -n ${TMUX:-} ]]; then exit 0; fi\n")
+	}
 	for _, key := range []string{"name", "device", "message"} {
 		v, ok := data[key].(string)
 		if !ok {
 			return nil, fmt.Errorf("invalid %s", key)
 		}
-		fmt.Fprintf(&out, "_spu_welcome_%s=%s\n", key, ShellQuote(v))
+		fmt.Fprintf(&out, "_spu_welcome_%s=%s\n", key, shellQuote(v))
 	}
 	if err := t.Execute(&out, nil); err != nil {
 		return nil, err
@@ -210,7 +240,7 @@ func checkOwned(s configstore.Store) error {
 	return nil
 }
 
-func install(s configstore.Store, data map[string]any) error {
+func install(s configstore.Store, data map[string]any, reply core.Responder) error {
 	if err := s.Validate(data); err != nil {
 		return err
 	}
@@ -226,7 +256,7 @@ func install(s configstore.Store, data map[string]any) error {
 			return fmt.Errorf("%s: %w", kind, err)
 		}
 	}
-	rendered, err := Render(data)
+	rendered, err := render(data)
 	if err != nil {
 		return err
 	}
@@ -251,15 +281,14 @@ func install(s configstore.Store, data map[string]any) error {
 		}
 		zshrc, _ := os.ReadFile(rcPath(s.Home, "zsh"))
 		if strings.Contains(string(zshrc), "$SOPPY/shell/welcome.sh") {
-			clioutput.Warn("welcome", "legacy welcome hook remains in ~/.zshrc")
+			reply.Warn("legacy welcome hook remains in ~/.zshrc")
 		}
-		detectOptionalTools(s.Home).warnMissing()
-		clioutput.Info("welcome", "generated "+scriptPath(s))
+		reply.Notify("generated " + scriptPath(s))
 		return nil
 	})
 }
 
-func uninstall(s configstore.Store, purge bool) error {
+func uninstall(s configstore.Store, purge bool, reply core.Responder) error {
 	if err := checkOwned(s); err != nil {
 		return err
 	}
@@ -286,42 +315,45 @@ func uninstall(s configstore.Store, purge bool) error {
 	return nil
 }
 
-func Run(home string, args []string) error {
+// Run performs one welcome command.
+//
+// It writes what it wants shown and asks through reply; it never touches a terminal
+// itself and never prints to this process's output. That is the whole of the
+// arrangement: the same code serves a terminal client and a window, because neither is
+// visible from here, and the same code runs under a test with no terminal at all.
+func Run(ctx context.Context, session core.Session, args []string, out io.Writer, reply core.Responder) error {
+	home := session.Home
 	s := Store(home)
 	v := s.Read()
 	if v.Warning != "" {
-		clioutput.Warn("welcome", v.Warning)
+		if err := reply.Warn(v.Warning); err != nil {
+			return err
+		}
 	}
 	if len(args) == 0 {
-		fmt.Println("welcome: install, uninstall, edit, migrate, status")
+		fmt.Fprintln(out, "welcome: install, uninstall, edit, migrate, status")
 		return nil
 	}
 	switch args[0] {
-	case "-h":
-		fmt.Println("welcome: generate an interactive shell banner")
-		return nil
-	case "--help":
-		fmt.Println("Usage: spu welcome install [--name NAME] [--device DEVICE] [--message TEXT] [--rc none|bash|zsh|both]\n       spu welcome uninstall [--purge]\n       spu welcome edit|migrate|status")
-		return nil
 	case "status":
-		fmt.Printf("config contract: %d (required %d)\n", v.StoredVersion, s.Current)
+		fmt.Fprintf(out, "config contract: %d (required %d)\n", v.StoredVersion, s.Current)
 		if err := checkOwned(s); err != nil {
-			fmt.Println("script:", err)
+			fmt.Fprintln(out, "script:", err)
 		} else if _, err := os.Stat(scriptPath(s)); err == nil {
 			var st State
 			raw, _ := os.ReadFile(statePath(s))
 			_ = json.Unmarshal(raw, &st)
-			fmt.Printf("script: managed, schema %d, template revision %d (current %d)\n", st.ScriptSchema, st.TemplateRevision, templateRevision)
+			fmt.Fprintf(out, "script: managed, schema %d, template revision %d (current %d)\n", st.ScriptSchema, st.TemplateRevision, templateRevision)
 			if st.TemplateRevision != templateRevision {
-				fmt.Println("refresh: run 'spu welcome install'")
+				fmt.Fprintln(out, "refresh: run 'spu welcome install'")
 			}
 		} else {
-			fmt.Println("script: absent")
+			fmt.Fprintln(out, "script: absent")
 		}
 		if LegacyChecksum(home) {
-			fmt.Println("legacy script: valid; run 'spu welcome migrate'")
+			fmt.Fprintln(out, "legacy script: valid; run 'spu welcome migrate'")
 		}
-		detectOptionalTools(home).printStatus()
+		detectOptionalTools(home).printStatus(out)
 		return nil
 	case "uninstall":
 		if len(args) > 2 || len(args) == 2 && args[1] != "--purge" {
@@ -330,7 +362,7 @@ func Run(home string, args []string) error {
 		if len(args) == 2 && !v.Writable {
 			return errors.New("cannot purge conflicted or future config")
 		}
-		return managedfile.WithLock(s.Dir(), func() error { return uninstall(s, len(args) == 2) })
+		return managedfile.WithLock(s.Dir(), func() error { return uninstall(s, len(args) == 2, reply) })
 	case "install", "edit", "migrate":
 	default:
 		return fmt.Errorf("unknown welcome action %q", args[0])
@@ -355,6 +387,7 @@ func Run(home string, args []string) error {
 	device := fs.String("device", data["device"].(string), "")
 	message := fs.String("message", data["message"].(string), "")
 	rc := fs.String("rc", data["rc"].(string), "")
+	showInTmux := fs.Bool("banner-in-tmux", bannerInTmux(data), "")
 	interactive := fs.Bool("interactive", false, "")
 	if err := fs.Parse(args[1:]); err != nil {
 		return err
@@ -369,40 +402,92 @@ func Run(home string, args []string) error {
 		}
 		data = resolved
 	} else {
-		if args[0] == "migrate" && LegacyChecksum(home) && !ui.Available() && len(args) == 1 {
+		// Whether a terminal is attached is a fact about the client, not about this
+		// process: core runs detached and cannot see one. So the client is asked
+		// whether it can ask.
+		canAsk := reply.CanAsk()
+		if args[0] == "migrate" && LegacyChecksum(home) && !canAsk && len(args) == 1 {
 			return errors.New("legacy migration needs a terminal or --answers file")
 		}
-		if *interactive && !ui.Available() {
+		if *interactive && !canAsk {
 			return errors.New("interactive terminal required")
 		}
-		if (args[0] == "edit" || args[0] == "migrate" || *interactive || args[0] == "install" && len(args) == 1) && ui.Available() {
-			err := ui.Run(huh.NewGroup(
-				huh.NewInput().Title("Banner name").Value(name), huh.NewInput().Title("Device name").Value(device),
-				huh.NewInput().Title("Message").Value(message),
-				huh.NewSelect[string]().Title("Startup hook").Options(huh.NewOption("None", "none"), huh.NewOption("Bash", "bash"), huh.NewOption("Zsh", "zsh"), huh.NewOption("Both", "both")).Value(rc),
-			))
+
+		// The flags are the starting values, exactly as they were when the form was
+		// built here.
+		data = map[string]any{}
+		for key, value := range v.Data {
+			data[key] = value
+		}
+		data["name"], data["device"], data["message"], data["rc"] = *name, *device, *message, *rc
+		data["banner_in_tmux"] = *showInTmux
+
+		shouldAsk := args[0] == "edit" || args[0] == "migrate" || *interactive ||
+			args[0] == "install" && len(args) == 1
+		if shouldAsk && canAsk {
+			// The form is projected from the schema rather than written out here, so it
+			// cannot describe a field the validation does not know about or miss one it
+			// does. A field added to the schema appears in the form by itself.
+			spec, err := form.FromSchema(s.Schema, data)
 			if err != nil {
 				return err
 			}
-		}
-		data = map[string]any{"name": *name, "device": *device, "message": *message, "rc": *rc}
-	}
-	if args[0] == "migrate" {
-		if LegacyChecksum(home) {
-			if err := install(s, data); err != nil {
+			answered, err := reply.Ask(ctx, spec)
+			if err != nil {
 				return err
 			}
-			base := filepath.Join(home, ".config", "soppy-utils")
-			os.Remove(filepath.Join(base, "welcome.sh"))
-			os.Remove(filepath.Join(base, "welcome.cksum"))
-			return nil
+			for key, value := range answered {
+				data[key] = value
+			}
 		}
-		if _, err := os.Stat(scriptPath(s)); err == nil {
-			return install(s, data)
-		}
-		return managedfile.WithLock(s.Dir(), func() error { return s.Save(data) })
 	}
-	return install(s, data)
+	installed := false
+	switch {
+	case args[0] == "migrate" && LegacyChecksum(home):
+		if err := install(s, data, reply); err != nil {
+			return err
+		}
+		base := filepath.Join(home, ".config", "soppy-utils")
+		os.Remove(filepath.Join(base, "welcome.sh"))
+		os.Remove(filepath.Join(base, "welcome.cksum"))
+		installed = true
+
+	case args[0] == "migrate":
+		if _, err := os.Stat(scriptPath(s)); err == nil {
+			if err := install(s, data, reply); err != nil {
+				return err
+			}
+			installed = true
+		} else if err := managedfile.WithLock(s.Dir(), func() error { return s.Save(data) }); err != nil {
+			return err
+		}
+
+	default:
+		if err := install(s, data, reply); err != nil {
+			return err
+		}
+		installed = true
+	}
+
+	if !installed {
+		return nil
+	}
+	return offerDependencies(ctx, session, s, reply)
+}
+
+// offerDependencies tells the client what the banner could use and cannot find.
+//
+// A client that cannot run anything is told the same thing rather than nothing: the
+// warning still has to reach a human reading the output, and the session continues. A
+// dependency that cannot be installed leaves a util degraded, which is a legitimate
+// state rather than a failure.
+func offerDependencies(ctx context.Context, session core.Session, s configstore.Store, reply core.Responder) error {
+	req := dependencyActions(session.GOOS, s.Home, detectOptionalTools(s.Home))
+	if req.Reason == "" {
+		return nil
+	}
+	_, err := reply.AskActions(ctx, req)
+	return err
 }
 
 // LegacyChecksum reports whether a previous generated banner still has its recorded cksum.

@@ -1,0 +1,18 @@
+{
+  "id": "conduct-of-code",
+  "version": 1,
+  "title": "Language-agnostic code conventions",
+  "policy": "reuse",
+  "on_modified": "overwrite",
+  "outputs": [
+    {
+      "root": "agents",
+      "path": "prompts/conduct-of-code.md",
+      "content": [
+        {
+          "file": "code/header.md"
+        }
+      ]
+    }
+  ]
+}

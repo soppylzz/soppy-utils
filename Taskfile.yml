@@ -33,13 +33,13 @@ tasks:
       - task: test
 
   build:
-    desc: Build the helper for the current platform (VERSION=dev OUT_DIR=dist).
+    desc: Build the binary for the current platform (VERSION=dev OUT_DIR=dist).
     env:
       SPU_BUILD_VERSION: '{{.VERSION}}'
       SPU_BUILD_OUT_DIR: '{{.OUT_DIR}}'
     cmds:
       - mkdir -p "$SPU_BUILD_OUT_DIR"
-      - go build -ldflags "-X main.version=$SPU_BUILD_VERSION" -o "$SPU_BUILD_OUT_DIR/spu-helper$(go env GOEXE)" ./cmd/spu-helper
+      - go build -ldflags "-X main.version=$SPU_BUILD_VERSION" -o "$SPU_BUILD_OUT_DIR/spu$(go env GOEXE)" ./cmd/spu
 
   package:
     desc: Build release archives and checksums (VERSION=dev OUT_DIR=dist).

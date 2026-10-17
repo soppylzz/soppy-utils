@@ -6,6 +6,39 @@
     "schema_version",
     "data"
   ],
+  "x-spu-ui": {
+    "title": "Global Git defaults",
+    "order": [
+      "editor",
+      "autocrlf",
+      "diff_tool",
+      "merge_tool",
+      "aliases"
+    ],
+    "fields": {
+      "editor": {
+        "title": "Git editor command"
+      },
+      "autocrlf": {
+        "title": "core.autocrlf",
+        "options": {
+          "input": "input",
+          "true": "true",
+          "false": "false"
+        }
+      },
+      "diff_tool": {
+        "title": "Diff tool"
+      },
+      "merge_tool": {
+        "title": "Merge tool"
+      },
+      "aliases": {
+        "title": "Aliases",
+        "help": "One entry per alias, as a JSON object"
+      }
+    }
+  },
   "properties": {
     "util": {
       "const": "git"

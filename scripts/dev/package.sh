@@ -19,13 +19,13 @@ for target in $targets; do
 
   mkdir -p "$stage/bin" "$stage/src/utils" "$stage/scripts" "$stage/libexec"
   cp "$repo_root/bin/spu" "$stage/bin/spu"
-  cp "$repo_root/src/spu.sh" "$repo_root/src/vscode.sh" "$stage/src/"
+  cp "$repo_root/src/spu.sh" "$stage/src/"
   cp "$repo_root/src/utils/style.sh" "$stage/src/utils/"
   cp "$repo_root/scripts/update.sh" "$repo_root/scripts/install.sh" "$repo_root/scripts/uninstall.sh" "$stage/scripts/"
 
   suffix=''
   [[ "$os" == windows ]] && suffix='.exe'
-  (cd "$repo_root" && GOOS="$os" GOARCH="$arch" CGO_ENABLED=0 go build -ldflags "-X main.version=$version" -o "$stage/libexec/spu-helper$suffix" ./cmd/spu-helper)
+  (cd "$repo_root" && GOOS="$os" GOARCH="$arch" CGO_ENABLED=0 go build -ldflags "-X main.version=$version" -o "$stage/libexec/spu$suffix" ./cmd/spu)
   tar -czf "$out_dir/$package.tar.gz" -C "$stage" .
 
   if command -v sha256sum >/dev/null 2>&1; then

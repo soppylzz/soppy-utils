@@ -22,16 +22,16 @@ fi
   exit 1
 }
 
-helper="$target/libexec/spu-helper"
-[[ "${OSTYPE:-}" == msys* || "${OSTYPE:-}" == cygwin* ]] && helper="$helper.exe"
+binary="$target/libexec/spu"
+[[ "${OSTYPE:-}" == msys* || "${OSTYPE:-}" == cygwin* ]] && binary="$binary.exe"
 if [[ "$purge" == true ]]; then
-  [[ -x "$helper" ]] || {
-    echo 'uninstall: helper missing; cannot purge safely' >&2
+  [[ -x "$binary" ]] || {
+    echo 'uninstall: the Go binary is missing; cannot purge safely' >&2
     exit 1
   }
-  "$helper" welcome uninstall --purge
-  "$helper" git uninstall --purge
-  "$helper" license purge
+  "$binary" welcome uninstall --purge
+  "$binary" git uninstall --purge
+  "$binary" license purge
 fi
 
 if [[ -L "$launcher" ]]; then
@@ -44,6 +44,14 @@ elif [[ -f "$launcher" ]] && grep -q '^# Managed by soppy-utils launcher$' "$lau
   rm -f -- "$launcher"
 else
   echo 'uninstall: launcher is unmanaged or missing; leaving it' >&2
+fi
+
+# The purge above may have started a core, and deleting the installation from under it
+# leaves a process running a binary that no longer exists.
+if [[ -x "$binary" ]]; then
+  if ! "$binary" __core shutdown; then
+    echo 'uninstall: the running core did not stop' >&2
+  fi
 fi
 
 rm -r -- "$target"

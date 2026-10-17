@@ -1,0 +1,18 @@
+{
+  "id": "conduct-of-go",
+  "version": 1,
+  "title": "Go conventions",
+  "policy": "reuse",
+  "on_modified": "overwrite",
+  "outputs": [
+    {
+      "root": "agents",
+      "path": "prompts/conduct-of-go.md",
+      "content": [
+        {
+          "file": "lang/go.md"
+        }
+      ]
+    }
+  ]
+}

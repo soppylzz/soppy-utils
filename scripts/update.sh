@@ -14,8 +14,8 @@ installed="$HOME/.local/share/soppy-utils"
   exit 1
 }
 
-helper="$root/libexec/spu-helper"
-[[ "${OSTYPE:-}" == msys* || "${OSTYPE:-}" == cygwin* ]] && helper="$helper.exe"
+binary="$root/libexec/spu"
+[[ "${OSTYPE:-}" == msys* || "${OSTYPE:-}" == cygwin* ]] && binary="$binary.exe"
 status=false
 version=''
 archive=''
@@ -79,13 +79,13 @@ fi
 
 if [[ "$status" == true ]]; then
   printf 'installed: %s\navailable: %s\n' "$old" "$version"
-  "$helper" config-status
+  "$binary" config-status
   exit 0
 fi
 
 if [[ "$old" == "$version" ]]; then
   echo "soppy-utils is already $version"
-  "$helper" config-status
+  "$binary" config-status
   exit 0
 fi
 
@@ -107,7 +107,7 @@ tmp="$(mktemp -d)"
 trap 'rm -r -- "$tmp"' EXIT
 cp "$root/scripts/install.sh" "$tmp/install.sh"
 
-# The copy runs outside the installed root, so Windows can replace spu-helper.exe.
+# The copy runs outside the installed root, so Windows can replace spu.exe.
 if [[ -n "$archive" ]]; then
   bash "$tmp/install.sh" --upgrade --archive "$archive"
 else

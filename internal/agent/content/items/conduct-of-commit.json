@@ -1,0 +1,34 @@
+{
+  "id": "conduct-of-commit",
+  "version": 1,
+  "title": "Commit message conventions",
+  "policy": "reuse",
+  "on_modified": "overwrite",
+  "questions": {
+    "type": "object",
+    "properties": {
+      "lint-commits": {
+        "type": "boolean",
+        "default": false,
+        "title": "Add a commitlint hook section"
+      }
+    }
+  },
+  "outputs": [
+    {
+      "root": "agents",
+      "path": "prompts/conduct-of-commit.md",
+      "content": [
+        {
+          "file": "commit/header.md"
+        },
+        {
+          "when": {
+            "answer": "lint-commits"
+          },
+          "file": "commit/husky.md"
+        }
+      ]
+    }
+  ]
+}

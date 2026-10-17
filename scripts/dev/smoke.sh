@@ -29,4 +29,10 @@ HOME="$work/home" bash "$root/scripts/install.sh" --archive "$archive"
 HOME="$work/home" bash "$work/home/.local/bin/spu" --version
 HOME="$work/home" bash "$work/home/.local/bin/spu" license --mit --name Smoke --year 2026 >/dev/null
 
+# Running a util starts a core. The temporary home it lives in is about to be removed, so
+# it is asked to stop: a smoke run that leaves a process behind is a smoke run that
+# leaves one every time.
+HOME="$work/home" bash "$work/home/.local/bin/spu" __core shutdown ||
+  echo 'smoke: the core did not stop' >&2
+
 echo 'smoke: passed'

@@ -2,11 +2,6 @@
 source "$(dirname "${BASH_SOURCE[0]}")/general/helpers.sh"
 
 spu="$(dirname "${BASH_SOURCE[0]}")/../bin/spu"
-# Go's defaults are derived from HOME, which the test replaces below.
-GOPATH="$(go env GOPATH)"
-GOCACHE="$(go env GOCACHE)"
-GOMODCACHE="$(go env GOMODCACHE)"
-export GOPATH GOCACHE GOMODCACHE
 _tmp="$(mktemp -d)"
 trap 'rm -r -- "$_tmp"' EXIT
 

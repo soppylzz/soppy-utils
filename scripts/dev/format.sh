@@ -17,7 +17,7 @@ command -v gofmt >/dev/null 2>&1 || {
   exit 1
 }
 
-shell_files=("$root/.githooks/pre-commit" "$root/bin/spu" "$root/src/spu.sh" "$root/src/vscode.sh" "$root"/src/utils/*.sh "$root"/scripts/*.sh "$root"/scripts/dev/*.sh "$root"/test/*.spec.sh "$root"/test/general/*.sh)
+shell_files=("$root/.githooks/pre-commit" "$root/bin/spu" "$root/src/spu.sh" "$root"/src/utils/*.sh "$root"/scripts/*.sh "$root"/scripts/dev/*.sh "$root"/test/*.spec.sh "$root"/test/general/*.sh)
 if [[ "$mode" == --write ]]; then
   shfmt -w -i 2 "${shell_files[@]}"
   (cd "$root" && gofmt -w cmd internal)

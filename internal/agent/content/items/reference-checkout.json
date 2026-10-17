@@ -1,0 +1,23 @@
+{
+  "id": "reference-checkout",
+  "version": 1,
+  "title": "Reading third-party source from a local checkout",
+  "policy": "reuse",
+  "on_modified": "overwrite",
+  "questions": {
+    "type": "object",
+    "properties": {
+      "reference-dir": {
+        "type": "string",
+        "default": "~/code/reference",
+        "title": "Where third-party checkouts are kept",
+        "x-spu-ui": {"help": "An absolute path, or one starting with ~"}
+      }
+    }
+  },
+  "outputs": [{
+    "root": "agents",
+    "path": "skills/reference-checkout/SKILL.md",
+    "content": [{"file": "skill/reference-checkout.md"}]
+  }]
+}
