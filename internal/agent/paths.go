@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"path"
 	"path/filepath"
 
 	"github.com/soppylzz/soppy-utils/internal/core"
@@ -21,5 +22,7 @@ func configDir(s core.Session) string {
 	if s.AppData != "" {
 		return filepath.Join(s.AppData, "soppy-utils")
 	}
-	return filepath.Join(s.Home, ".config", "soppy-utils")
+	// path.Join: a session's platform is not necessarily this binary's, and the
+	// separator has to be the session's.
+	return path.Join(s.Home, ".config", "soppy-utils")
 }

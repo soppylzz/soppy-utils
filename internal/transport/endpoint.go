@@ -9,7 +9,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"path/filepath"
+	"path"
 	"strings"
 )
 
@@ -54,7 +54,10 @@ func Resolve(goos, home, override string) (Endpoint, error) {
 	case "darwin", "linux":
 		address := override
 		if address == "" {
-			address = filepath.Join(home, ".config", "soppy-utils", "core.sock")
+			// path.Join, not filepath.Join: this is a Unix path even when the binary
+			// asking was built for Windows, which is a question a test asks and a session
+			// on Git Bash makes real.
+			address = path.Join(home, ".config", "soppy-utils", "core.sock")
 		}
 		// Checked on the chosen address rather than on the home, so that a home too
 		// deep to hold a socket stays usable when the endpoint is pointed elsewhere.

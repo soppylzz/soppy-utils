@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -46,7 +47,7 @@ func Run(ctx context.Context, session core.Session, args []string, out io.Writer
 		return err
 	}
 
-	path := pathFor(dir, want)
+	path := pathFor(session.GOOS, dir, want)
 
 	// The editor is the user's program in the user's session, so core declares it and the
 	// client runs it. Nothing here changes the machine, which is why a client does not
@@ -89,9 +90,11 @@ func parse(args []string) (target, error) {
 func userDir(s core.Session) (string, error) {
 	switch s.GOOS {
 	case "darwin":
-		return filepath.Join(s.Home, "Library", "Application Support", "Code", "User"), nil
+		// path.Join rather than filepath.Join: these describe another platform's layout,
+		// and the separator has to be that platform's rather than this binary's.
+		return path.Join(s.Home, "Library", "Application Support", "Code", "User"), nil
 	case "linux":
-		return filepath.Join(s.Home, ".config", "Code", "User"), nil
+		return path.Join(s.Home, ".config", "Code", "User"), nil
 	case "windows":
 		if s.AppData == "" {
 			return "", errors.New("the session did not say where the roaming application " +
@@ -102,12 +105,16 @@ func userDir(s core.Session) (string, error) {
 	return "", fmt.Errorf("there is nowhere to look for VS Code configuration on %s", s.GOOS)
 }
 
-func pathFor(dir string, want target) string {
+func pathFor(goos, dir string, want target) string {
+	join := path.Join
+	if goos == "windows" {
+		join = filepath.Join
+	}
 	switch want {
 	case snippets:
-		return filepath.Join(dir, "snippets")
+		return join(dir, "snippets")
 	case settings:
-		return filepath.Join(dir, "settings.json")
+		return join(dir, "settings.json")
 	}
 	return filepath.Join(dir, "keybindings.json")
 }
